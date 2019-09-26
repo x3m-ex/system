@@ -158,6 +158,17 @@ defmodule X3m.System.Message do
   def put_request(%{} = request, %__MODULE__{} = message),
     do: %{message | valid?: true, request: request}
 
+  @doc """
+  Puts `value` under `key` in `message.raw_request` map.
+  """
+  def put_in_raw_request(%__MODULE__{} = message, key, value) do
+    raw_request =
+      (message.raw_request || %{})
+      |> Map.put(key, value)
+
+    %{message | raw_request: raw_request}
+  end
+
   def add_event(%__MODULE__{events: events} = message, event),
     do: %{message | events: [event | events]}
 
