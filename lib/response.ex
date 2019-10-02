@@ -2,6 +2,7 @@ defmodule X3m.System.Response do
   @type t ::
           :ok
           | {:ok, any}
+          | {:ok, any, integer}
           | {:created, any}
           | {:service_unavailable, atom}
           | {:service_timeout, atom, String.t(), non_neg_integer}

@@ -74,7 +74,7 @@ defmodule X3m.System.MessageHandler do
         with {:ok, pid} <- @pid_facade_mod.spawn_new(@pid_facade_name, id),
              {:block, %X3m.System.Message{} = message, transaction_id} <-
                @gen_aggregate_mod.handle_msg(pid, cmd, message),
-             {:ok, version} <- _apply_changes(pid, transaction_id, message) do
+             {:ok, message, version} <- _apply_changes(pid, transaction_id, message) do
           case message.response do
             {:created, ^id} -> %X3m.System.Message{message | response: {:created, id, version}}
             other -> message
@@ -101,7 +101,7 @@ defmodule X3m.System.MessageHandler do
                @pid_facade_mod.get_pid(@pid_facade_name, id, &when_pid_is_not_registered/3),
              {:block, %X3m.System.Message{} = message, transaction_id} <-
                @gen_aggregate_mod.handle_msg(pid, cmd, message),
-             {:ok, version} <- _apply_changes(pid, transaction_id, message) do
+             {:ok, message, version} <- _apply_changes(pid, transaction_id, message) do
           case message.response do
             :ok -> %X3m.System.Message{message | response: {:ok, version}}
             {:ok, any} -> %X3m.System.Message{message | response: {:ok, any, version}}
@@ -197,7 +197,7 @@ defmodule X3m.System.MessageHandler do
         end
       end
 
-      defp _apply_changes(pid, transaction_id, %X3m.System.Message{} = message) do
+      defp _apply_changes(pid, transaction_id, %X3m.System.Message{dry_run: false} = message) do
         case save_events(message) do
           {:ok, last_event_number} ->
             {:ok, new_state} =
@@ -208,13 +208,35 @@ defmodule X3m.System.MessageHandler do
             end)
 
             :ok = save_state(message.aggregate_meta.id, new_state)
-            {:ok, last_event_number}
+            {:ok, message, last_event_number}
 
           error ->
             Logger.error(fn -> "Error saving events #{inspect(error)}" end)
             Process.exit(pid, :kill)
             X3m.System.Message.error(message, :internal_error)
         end
+      end
+
+      defp _apply_changes(pid, transaction_id, %X3m.System.Message{dry_run: true} = message) do
+        last_event_number = message.aggregate_meta.version
+        message = %{message | events: [], response: {:ok, last_event_number}}
+        {:ok, _} = @gen_aggregate_mod.commit(pid, transaction_id, message, last_event_number)
+
+        Logger.info(fn -> "Successfull dry_run of events." end)
+        {:ok, message, last_event_number}
+      end
+
+      defp _apply_changes(
+             pid,
+             transaction_id,
+             %X3m.System.Message{dry_run: :verbose, events: events} = message
+           ) do
+        last_event_number = message.aggregate_meta.version
+        message = %{message | events: [], response: {:ok, events, last_event_number}}
+        {:ok, _} = @gen_aggregate_mod.commit(pid, transaction_id, message, last_event_number)
+
+        Logger.info(fn -> "Successfull verbose dry_run of events." end)
+        {:ok, message, last_event_number}
       end
 
       defp __respond_on(%X3m.System.Message{} = message),

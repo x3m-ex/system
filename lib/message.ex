@@ -13,6 +13,7 @@ defmodule X3m.System.Message do
     * `causation_id` - id of the message that "caused" this message.
     * `logger_metadata` - In each new process `Logger.metadata` should be set to this value.
     * `invoked_at` - utc time when message was generated.
+    * `dry_run` - specifies dry run option. It can be either `false`, `true` or `:verbose`.
     * `request` - request structure converted to Ecto.Changeset (or anything else useful).
     * `raw_request` - request as it is received before converting to Message (i.e. `params` from controller action).
     * `assigns` - shared Data as a map.
@@ -28,7 +29,7 @@ defmodule X3m.System.Message do
   require Logger
   alias X3m.System.Response
 
-  @enforce_keys ~w(service_name id correlation_id causation_id invoked_at 
+  @enforce_keys ~w(service_name id correlation_id causation_id invoked_at dry_run
                    reply_to halted? raw_request request valid? response events
                    aggregate_meta assigns logger_metadata)a
   defstruct @enforce_keys
@@ -40,6 +41,7 @@ defmodule X3m.System.Message do
           causation_id: String.t(),
           logger_metadata: Keyword.t(),
           invoked_at: DateTime.t(),
+          dry_run: dry_run(),
           raw_request: %{String.t() => any},
           request: nil | request,
           valid?: boolean,
@@ -54,6 +56,7 @@ defmodule X3m.System.Message do
   @typep request :: map()
   @type error :: {String.t(), Keyword.t()}
   @type errors :: [{atom, error}]
+  @type dry_run :: boolean | :verbose
 
   @doc """
   Creates new message with given `service_name` and provided `opts`:
@@ -71,6 +74,7 @@ defmodule X3m.System.Message do
     id = Keyword.get(opts, :id, _get_request_id())
     correlation_id = Keyword.get(opts, :correlation_id, id)
     causation_id = Keyword.get(opts, :causation_id, correlation_id)
+    dry_run = Keyword.get(opts, :dry_run, false)
     reply_to = Keyword.get(opts, :reply_to, self())
     raw_request = Keyword.get(opts, :raw_request)
     logger_metadata = Keyword.get(opts, :logger_metadata, Logger.metadata())
@@ -81,6 +85,7 @@ defmodule X3m.System.Message do
       correlation_id: correlation_id,
       causation_id: causation_id,
       invoked_at: DateTime.utc_now(),
+      dry_run: dry_run,
       raw_request: raw_request,
       request: nil,
       valid?: true,

@@ -7,7 +7,7 @@ Infrastructure building blocks for X3m backend system.
 ```elixir
 def deps do
   [
-    {:x3m_system, "~> 0.4.3"}}
+    {:x3m_system, "~> 0.4.4"}}
   ]
 end
 ```
