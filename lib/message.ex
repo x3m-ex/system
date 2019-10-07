@@ -174,6 +174,17 @@ defmodule X3m.System.Message do
     %{message | raw_request: raw_request}
   end
 
+  @doc """
+  Adds `event` in `message.events` list. If `event` is nil
+  it behaves as noop.
+
+  After `return/2` (and friends) order of `msg.events` will be the same as
+  they've been added.
+  """
+  @spec add_event(message :: t(), event :: nil | any) :: t()
+  def add_event(%__MODULE__{} = message, nil),
+    do: message
+
   def add_event(%__MODULE__{events: events} = message, event),
     do: %{message | events: [event | events]}
 
