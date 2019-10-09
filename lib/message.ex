@@ -42,7 +42,7 @@ defmodule X3m.System.Message do
           logger_metadata: Keyword.t(),
           invoked_at: DateTime.t(),
           dry_run: dry_run(),
-          raw_request: %{String.t() => any},
+          raw_request: map(),
           request: nil | request,
           valid?: boolean,
           assigns: assigns,
@@ -98,6 +98,10 @@ defmodule X3m.System.Message do
       logger_metadata: logger_metadata
     }
   end
+
+  @spec to_service(t(), atom) :: t()
+  def to_service(%__MODULE__{} = sys_msg, service_name),
+    do: %__MODULE__{sys_msg | service_name: service_name}
 
   @doc """
   Assigns a value to a key in the message.

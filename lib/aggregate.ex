@@ -30,6 +30,32 @@ defmodule X3m.System.Aggregate do
     end
   end
 
+  defmacro handle_msg(msg_name, validate_fun, on_success) do
+    quote do
+      @spec unquote(msg_name)(X3m.System.Message.t(), X3m.System.Aggregate.State.t()) ::
+              {:block | :noblock, X3m.System.Message.t(), X3m.System.Aggregate.State.t()}
+      def unquote(msg_name)(%X3m.System.Message{} = message, state) do
+        X3m.System.Instrumenter.execute(:handle_msg, %{}, %{
+          aggregate: __MODULE__,
+          message: unquote(msg_name)
+        })
+
+        client_state = state.client_state || raise("Aggregate state wasn't set")
+
+        case unquote(validate_fun).(message, client_state) do
+          %X3m.System.Message{halted?: true} = message ->
+            {:noblock, message, state}
+
+          %X3m.System.Message{} = message ->
+            {label, %X3m.System.Message{} = message, client_state} =
+              unquote(on_success).(message, client_state)
+
+            {label, message, %State{state | client_state: client_state}}
+        end
+      end
+    end
+  end
+
   defmacro __using__(_opts) do
     quote do
       alias X3m.System.Aggregate

@@ -11,6 +11,7 @@ locals_without_parens = [
 
   # Aggregate
   handle_msg: 2,
+  handle_msg: 3,
 
   # Ecto
   field: 1,
