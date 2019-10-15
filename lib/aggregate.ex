@@ -79,7 +79,7 @@ defmodule X3m.System.Aggregate do
 
   defmacro __before_compile__(_env) do
     quote do
-      defp apply_event(_event, state),
+      def apply_event(_event, state),
         do: state
     end
   end
