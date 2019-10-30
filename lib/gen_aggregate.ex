@@ -105,7 +105,7 @@ defmodule X3m.System.GenAggregate do
         X3m.System.Instrumenter.execute(
           :aggregate_commit_timeout,
           %{timeout_after: state.commit_timeout},
-          %{aggregagate: state.aggregate_mod, message: cmd}
+          %{aggregate: state.aggregate_mod, message: cmd}
         )
 
         {:stop, {:commit_timeout, state.commit_timeout}, state}
