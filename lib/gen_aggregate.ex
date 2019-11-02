@@ -17,8 +17,10 @@ defmodule X3m.System.GenAggregate do
     do: GenServer.call(pid, {:apply_event_stream, event_stream})
 
   @impl X3m.System.GenAggregateMod
-  def handle_msg(pid, cmd, %Message{} = message),
-    do: GenServer.call(pid, {:handle_msg, cmd, message})
+  def handle_msg(pid, cmd, %Message{} = message, opts) do
+    commit_timeout = Keyword.fetch!(opts, :commit_timeout)
+    GenServer.call(pid, {:handle_msg, cmd, message, commit_timeout}, commit_timeout)
+  end
 
   @impl X3m.System.GenAggregateMod
   @spec commit(pid, String.t(), Message.t(), integer) ::
@@ -59,7 +61,11 @@ defmodule X3m.System.GenAggregate do
     {:reply, :ok, %State{state | aggregate_state: aggregate_state}}
   end
 
-  def handle_call({:handle_msg, cmd, %Message{} = message}, _from, %State{} = state) do
+  def handle_call(
+        {:handle_msg, cmd, %Message{} = message, commit_timeout},
+        _from,
+        %State{} = state
+      ) do
     Logger.metadata(message.logger_metadata)
     # TODO: if version is already sent do optimistic locking
     aggregate_meta = Map.put(message.aggregate_meta, :version, state.aggregate_state.version)
@@ -73,7 +79,9 @@ defmodule X3m.System.GenAggregate do
         transaction_id = UUID.uuid4()
         response = {:block, message, transaction_id}
         Logger.metadata([])
-        {:reply, response, state, {:continue, {:wait_for_commit, transaction_id, cmd}}}
+
+        {:reply, response, state,
+         {:continue, {:wait_for_commit, transaction_id, cmd, commit_timeout}}}
 
       {:noblock, %Message{} = message, %X3m.System.Aggregate.State{} = aggregate_state} ->
         state = %State{state | aggregate_state: aggregate_state}
@@ -84,7 +92,7 @@ defmodule X3m.System.GenAggregate do
   end
 
   @impl GenServer
-  def handle_continue({:wait_for_commit, transaction_id, cmd}, %State{} = state) do
+  def handle_continue({:wait_for_commit, transaction_id, cmd, commit_timeout}, %State{} = state) do
     receive do
       {:commit, ^transaction_id, %Message{} = message, last_version, from} ->
         %X3m.System.Aggregate.State{} =
@@ -101,14 +109,14 @@ defmodule X3m.System.GenAggregate do
 
         {:noreply, state}
     after
-      state.commit_timeout ->
+      commit_timeout ->
         X3m.System.Instrumenter.execute(
           :aggregate_commit_timeout,
           %{timeout_after: state.commit_timeout},
           %{aggregate: state.aggregate_mod, message: cmd}
         )
 
-        {:stop, {:commit_timeout, state.commit_timeout}, state}
+        {:stop, {:commit_timeout, commit_timeout}, state}
     end
   end
 end

@@ -1,6 +1,7 @@
 defmodule X3m.System.MessageHandler do
   defmacro on_new_aggregate(cmd, opts \\ []) do
     id_field = Keyword.get(opts, :id, "id")
+    commit_timeout = Keyword.get(opts, :commit_timeout, 5_000)
 
     quote do
       @doc """
@@ -20,7 +21,7 @@ defmodule X3m.System.MessageHandler do
             msg
 
           %X3m.System.Message{halted?: false} = msg ->
-            execute_on_new_aggregate(unquote(cmd), msg)
+            execute_on_new_aggregate(unquote(cmd), msg, commit_timeout: unquote(commit_timeout))
         end
         |> __respond_on()
       end
@@ -29,6 +30,7 @@ defmodule X3m.System.MessageHandler do
 
   defmacro on_aggregate(cmd, opts \\ []) do
     id_field = Keyword.get(opts, :id, "id")
+    commit_timeout = Keyword.get(opts, :commit_timeout, 5_000)
 
     quote do
       @doc """
@@ -47,7 +49,7 @@ defmodule X3m.System.MessageHandler do
             msg
 
           %X3m.System.Message{halted?: false} = msg ->
-            execute_on_aggregate(unquote(cmd), msg)
+            execute_on_aggregate(unquote(cmd), msg, commit_timeout: unquote(commit_timeout))
         end
         |> __respond_on()
       end
@@ -70,10 +72,14 @@ defmodule X3m.System.MessageHandler do
       defp aggregate_mod,
         do: @aggregate_mod
 
-      defp execute_on_new_aggregate(cmd, %X3m.System.Message{aggregate_meta: %{id: id}} = message) do
+      defp execute_on_new_aggregate(
+             cmd,
+             %X3m.System.Message{aggregate_meta: %{id: id}} = message,
+             opts
+           ) do
         with {:ok, pid} <- @pid_facade_mod.spawn_new(@pid_facade_name, id),
              {:block, %X3m.System.Message{} = message, transaction_id} <-
-               @gen_aggregate_mod.handle_msg(pid, cmd, message),
+               @gen_aggregate_mod.handle_msg(pid, cmd, message, opts),
              {:ok, message, version} <- _apply_changes(pid, transaction_id, message) do
           case message.response do
             {:created, ^id} -> %X3m.System.Message{message | response: {:created, id, version}}
@@ -96,11 +102,15 @@ defmodule X3m.System.MessageHandler do
         end
       end
 
-      defp execute_on_aggregate(cmd, %X3m.System.Message{aggregate_meta: %{id: id}} = message) do
+      defp execute_on_aggregate(
+             cmd,
+             %X3m.System.Message{aggregate_meta: %{id: id}} = message,
+             opts
+           ) do
         with {:ok, pid} <-
                @pid_facade_mod.get_pid(@pid_facade_name, id, &when_pid_is_not_registered/3),
              {:block, %X3m.System.Message{} = message, transaction_id} <-
-               @gen_aggregate_mod.handle_msg(pid, cmd, message),
+               @gen_aggregate_mod.handle_msg(pid, cmd, message, opts),
              {:ok, message, version} <- _apply_changes(pid, transaction_id, message) do
           case message.response do
             :ok -> %X3m.System.Message{message | response: {:ok, version}}
