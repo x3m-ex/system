@@ -15,12 +15,16 @@ defmodule X3m.System.LocalAggregates do
           unquote(opts)
           |> Enum.map(fn item -> aggregate_group(item, prefix) end)
 
-        supervise(children, strategy: :one_for_one)
+        Supervisor.init(children, strategy: :one_for_one)
       end
 
       defp aggregate_group(aggr_mod, prefix) do
         name = X3m.System.AggregateGroup.name(aggr_mod)
-        supervisor(X3m.System.AggregateGroup, [prefix, aggr_mod], id: name)
+
+        %{
+          id: name,
+          start: {X3m.System.AggregateGroup, :start_link, [prefix, aggr_mod]}
+        }
       end
     end
   end

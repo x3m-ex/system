@@ -1,5 +1,6 @@
 defmodule X3m.System.GenAggregate do
-  use GenServer
+  use GenServer, restart: :transient
+
   alias X3m.System.Message
   @behaviour X3m.System.GenAggregateMod
 

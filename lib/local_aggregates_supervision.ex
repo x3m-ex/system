@@ -4,9 +4,10 @@ defmodule X3m.System.LocalAggregatesSupervision do
   def start_link([configuration_module, prefix]),
     do: Supervisor.start_link(__MODULE__, {configuration_module, prefix}, name: name(prefix))
 
+  @impl Supervisor
   def init({configuration_module, prefix}) do
     children = [supervisor(configuration_module, [prefix])]
-    supervise(children, strategy: :one_for_one)
+    Supervisor.init(children, strategy: :one_for_one)
   end
 
   defp name(prefix),

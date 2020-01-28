@@ -9,10 +9,10 @@ defmodule X3m.System.AggregatePidManager do
   def init({prefix, aggregate_mod}) do
     children = [
       worker(Registry, [Registry.name(aggregate_mod)]),
-      supervisor(AggregateSup, [prefix, aggregate_mod])
+      {AggregateSup, [prefix, aggregate_mod]}
     ]
 
-    supervise(children, strategy: :one_for_all)
+    Supervisor.init(children, strategy: :one_for_all)
   end
 
   def name(aggregate_mod),

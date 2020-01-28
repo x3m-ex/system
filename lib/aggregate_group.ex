@@ -5,13 +5,14 @@ defmodule X3m.System.AggregateGroup do
   def start_link(prefix, aggregate_mod),
     do: Supervisor.start_link(__MODULE__, {prefix, aggregate_mod}, name: name(aggregate_mod))
 
+  @impl Supervisor
   def init({prefix, aggregate_mod}) do
     children = [
       supervisor(AggregatePidManager, [prefix, aggregate_mod]),
       worker(AggregatePidFacade, [aggregate_mod])
     ]
 
-    supervise(children, strategy: :one_for_one)
+    Supervisor.init(children, strategy: :one_for_one)
   end
 
   def name(aggregate_mod),
