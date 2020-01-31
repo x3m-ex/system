@@ -26,6 +26,7 @@ defmodule X3m.System.Aggregate do
           unquote(fun).(message, client_state)
 
         {label, message, %State{state | client_state: client_state}}
+        |> _post_processor()
       end
     end
   end
@@ -52,6 +53,7 @@ defmodule X3m.System.Aggregate do
 
             {label, message, %State{state | client_state: client_state}}
         end
+        |> _post_processor()
       end
     end
   end
@@ -81,6 +83,13 @@ defmodule X3m.System.Aggregate do
     quote do
       def apply_event(_event, state),
         do: state
+
+      @spec _post_processor(
+              {:block | :noblock, X3m.System.Message.t(), X3m.System.Aggregate.State.t()}
+            ) ::
+              {:block | :noblock, X3m.System.Message.t(), X3m.System.Aggregate.State.t()}
+      def _post_processor(response),
+        do: response
     end
   end
 end
