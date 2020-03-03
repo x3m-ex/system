@@ -55,8 +55,8 @@ defmodule X3m.System.GenAggregate do
   def handle_call({:apply_event_stream, event_stream}, _from, %State{} = state) do
     aggregate_state =
       event_stream
-      |> Enum.reduce(state.aggregate_state, fn {event, event_number}, acc ->
-        apply(state.aggregate_mod, :apply_events, [[event], event_number, acc])
+      |> Enum.reduce(state.aggregate_state, fn {event, event_number, event_metadata}, acc ->
+        apply(state.aggregate_mod, :apply_events, [[event], event_number, event_metadata, acc])
       end)
 
     {:reply, :ok, %State{state | aggregate_state: aggregate_state}}
@@ -101,10 +101,17 @@ defmodule X3m.System.GenAggregate do
           apply(state.aggregate_mod, :apply_events, [
             message.events,
             last_version,
+            nil,
             state.aggregate_state
           ])
 
-        state = %State{state | aggregate_state: aggregate_state}
+        processed_messages = MapSet.put(aggregate_state.processed_messages, message.id)
+
+        state = %State{
+          state
+          | aggregate_state: %{aggregate_state | processed_messages: processed_messages}
+        }
+
         response = {:transaction_commited, transaction_id, aggregate_state}
         send(from, response)
 
