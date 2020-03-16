@@ -65,6 +65,7 @@ defmodule X3m.System.MessageHandler do
       @aggregate_mod Keyword.fetch!(unquote(opts), :aggregate_mod)
       @repo Keyword.fetch!(unquote(opts), :aggregate_repo)
       @stream Keyword.get(unquote(opts), :stream)
+      @event_metadata Keyword.get(unquote(opts), :event_metadata, %{})
       @pid_facade_mod Keyword.fetch!(unquote(opts), :pid_facade_mod)
       @pid_facade_name @pid_facade_mod.name(@aggregate_mod)
       @gen_aggregate_mod @pid_facade_mod.get_aggregate_mod()
@@ -162,7 +163,7 @@ defmodule X3m.System.MessageHandler do
       def save_events(%X3m.System.Message{} = message) do
         message.aggregate_meta.id
         |> stream_name()
-        |> @repo.save_events(message)
+        |> @repo.save_events(message, @event_metadata)
       end
 
       @doc false

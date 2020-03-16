@@ -21,14 +21,14 @@ defmodule X3m.System.Router do
         use X3m.System.Router
 
         @servicedoc false
-        service(:create_user, MessageHandler)
+        service :create_user, MessageHandler
 
         @servicedoc \"""
         overridden!
         \"""
-        service(:get_user, MessageHandler)
+        service :get_user, MessageHandler
 
-        service(:edit_user, MessageHandler)
+        service :edit_user, MessageHandler
       end
 
 
