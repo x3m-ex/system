@@ -10,7 +10,11 @@ defmodule X3m.System.Aggregate.Repo do
               hard_delete? :: boolean,
               expected_version :: integer()
             ) :: :ok
-  @callback save_events(stream_name :: String.t(), message :: X3m.System.Message.t(), events_metadata :: map()) ::
+  @callback save_events(
+              stream_name :: String.t(),
+              message :: X3m.System.Message.t(),
+              events_metadata :: map()
+            ) ::
               {:ok, last_event_number :: integer}
               | {:error, :wrong_expected_version, expected_last_event_number :: integer}
               | {:error, any}

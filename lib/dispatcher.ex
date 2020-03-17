@@ -17,7 +17,7 @@ defmodule X3m.System.Dispatcher do
       {:unavailable, message} ->
         Instrumenter.execute(
           :service_not_found,
-          %{time: DateTime.utc_now(), duration: Instrumenter.duration(mono_start, :microsecond)},
+          %{time: DateTime.utc_now(), duration: Instrumenter.duration(mono_start)},
           %{message: message, caller_node: Node.self()}
         )
 
@@ -26,7 +26,7 @@ defmodule X3m.System.Dispatcher do
       {node, mod} ->
         Instrumenter.execute(
           :service_found,
-          %{time: DateTime.utc_now(), duration: Instrumenter.duration(mono_start, :microsecond)},
+          %{time: DateTime.utc_now(), duration: Instrumenter.duration(mono_start)},
           %{message: message, caller_node: Node.self(), service_node: node}
         )
 

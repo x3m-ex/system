@@ -162,7 +162,7 @@ defmodule X3m.System.Router do
               :service_responded,
               %{
                 time: DateTime.utc_now(),
-                duration: X3m.System.Instrumenter.duration(mono_start, :microsecond)
+                duration: X3m.System.Instrumenter.duration(mono_start)
               },
               %{message: message}
             )
