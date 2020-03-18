@@ -23,7 +23,7 @@ defmodule X3m.System.MessageHandler do
           %X3m.System.Message{halted?: false} = msg ->
             execute_on_new_aggregate(unquote(cmd), msg, commit_timeout: unquote(commit_timeout))
         end
-        |> __respond_on()
+        |> respond_on()
       end
     end
   end
@@ -51,7 +51,7 @@ defmodule X3m.System.MessageHandler do
           %X3m.System.Message{halted?: false} = msg ->
             execute_on_aggregate(unquote(cmd), msg, commit_timeout: unquote(commit_timeout))
         end
-        |> __respond_on()
+        |> respond_on()
       end
     end
   end
@@ -171,7 +171,7 @@ defmodule X3m.System.MessageHandler do
       def stream_name(id), do: id |> to_string |> stream_name
 
       @doc false
-      def save_state(id, state),
+      def save_state(_id, _state, %X3m.System.Message{}),
         do: :ok
 
       @doc false
@@ -218,7 +218,7 @@ defmodule X3m.System.MessageHandler do
               "Successfull commit of events. New aggregate version: #{last_event_number}"
             end)
 
-            :ok = save_state(message.aggregate_meta.id, new_state)
+            save_state(message.aggregate_meta.id, new_state, message)
             {:ok, message, last_event_number}
 
           error ->
@@ -250,10 +250,15 @@ defmodule X3m.System.MessageHandler do
         {:ok, message, last_event_number}
       end
 
-      defp __respond_on(%X3m.System.Message{} = message),
-        do: {:reply, message}
+      defoverridable when_pid_is_not_registered: 3, save_events: 1, save_state: 3
+      @before_compile X3m.System.MessageHandler
+    end
+  end
 
-      defoverridable when_pid_is_not_registered: 3
+  defmacro __before_compile__(_env) do
+    quote do
+      def respond_on(%X3m.System.Message{} = message),
+        do: {:reply, message}
     end
   end
 end
