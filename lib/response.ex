@@ -4,6 +4,7 @@ defmodule X3m.System.Response do
           | {:ok, any}
           | {:ok, any, integer}
           | {:created, any}
+          | {:created, any, integer}
           | {:service_unavailable, atom}
           | {:service_timeout, atom, String.t(), non_neg_integer}
           | {:validation_error, map}
