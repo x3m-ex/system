@@ -4,7 +4,7 @@ defmodule X3m.System.MixProject do
   def project do
     [
       app: :x3m_system,
-      version: "0.5.6",
+      version: "0.6.0",
       elixir: "~> 1.7",
       source_url: "https://github.com/x3m-ex/system",
       description: """
@@ -42,6 +42,8 @@ defmodule X3m.System.MixProject do
     [
       {:elixir_uuid, "~> 1.2"},
       {:telemetry, "~> 0.4"},
+      # needed for use of X3m.System.Scheduller
+      {:tzdata, "~> 1.0", optional: true},
 
       # test dependencies
       {:dialyxir, "~> 1.0.0-rc.6", only: [:test, :dev], runtime: false},

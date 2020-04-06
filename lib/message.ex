@@ -99,6 +99,20 @@ defmodule X3m.System.Message do
     }
   end
 
+  @doc """
+  Creates new message with given `service_name` that is caused by other `msg`.
+  """
+  @spec new_caused_by(atom, __MODULE__.t(), Keyword.t()) :: __MODULE__.t()
+  def new_caused_by(service_name, %__MODULE__{} = msg, opts \\ []) when is_atom(service_name) do
+    service_name
+    |> new(
+      id: gen_msg_id(),
+      correlation_id: msg.correlation_id,
+      causation_id: msg.id,
+      raw_request: opts[:raw_request]
+    )
+  end
+
   @spec to_service(t(), atom) :: t()
   def to_service(%__MODULE__{} = sys_msg, service_name),
     do: %__MODULE__{sys_msg | service_name: service_name}
