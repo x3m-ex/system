@@ -1,13 +1,13 @@
-defmodule X3m.System.Scheduller do
+defmodule X3m.System.Scheduler do
   @moduledoc """
-  This behaviour should be used to schedulle `X3m.System.Message` delivery
+  This behaviour should be used to schedule `X3m.System.Message` delivery
   at some point in time in the future. Implementation module should persist alarms so when process
   is respawned they can be reloaded into memory.
 
-  Not all schedulled alarms are kept in memory. They are loaded in bulks
+  Not all scheduled alarms are kept in memory. They are loaded in bulks
   each `in_memory_interval/0` milliseconds for next `2 * in_memory_interval/0` milliseconds.
 
-  If message with it's `X3m.System.Message.id` is already in memory (and schedulled for delivery)
+  If message with its `X3m.System.Message.id` is already in memory (and scheduled for delivery)
   it is ignored.
 
 
@@ -17,10 +17,10 @@ defmodule X3m.System.Scheduller do
   """
 
   @doc """
-  This callback is invoked when `X3m.System.Message` should be saved as a alarm.
-  Time when it should be dispatched is set in it's `assigns.dispatch_at` as `DateTime`.
+  This callback is invoked when `X3m.System.Message` should be saved as an alarm.
+  Time when it should be dispatched is set in its `assigns.dispatch_at` as `DateTime`.
 
-  3rd parameter (state) is the one that was set when Scheduller's `start_link/1` was
+  3rd parameter (state) is the one that was set when Scheduler's `start_link/1` was
   called.
   """
   @callback save_alarm(
@@ -30,7 +30,7 @@ defmodule X3m.System.Scheduller do
             ) :: :ok
 
   @doc """
-  Load alarms callback is invoked on Schedullers init with `load_from` as `nil`,
+  Load alarms callback is invoked on Scheduler's init with `load_from` as `nil`,
   and after that it is invoked each `in_memory_interval/0` with `load_from`
   set to previous `load_until` value and new `load_until` will be
   `load_from = 2 * in_memory_interval/0`.
@@ -44,11 +44,11 @@ defmodule X3m.System.Scheduller do
               | {:error, term()}
 
   @doc """
-  This callback is invoked when schedulled message is processed.
+  This callback is invoked when scheduled message is processed.
 
   It should return either `:ok` (and remove from persitance) so message delivery is not retried or
-  ammount of milliseconds in which delivery will be retried with potentially
-  modifed `X3m.System.Message`. It's `assigns` can used to track number of retries for example.
+  amount of milliseconds in which delivery will be retried with potentially
+  modifed `X3m.System.Message`. Its `assigns` can used to track number of retries for example.
   """
   @callback service_responded(X3m.System.Message.t(), state :: any()) ::
               :ok
@@ -72,24 +72,24 @@ defmodule X3m.System.Scheduller do
     @type t() :: %__MODULE__{
             client_state: any(),
             loaded_until: nil | DateTime.t(),
-            schedulled_alarms: %{String.t() => X3m.System.Message.t()}
+            scheduled_alarms: %{String.t() => X3m.System.Message.t()}
           }
 
-    @enforce_keys ~w(client_state loaded_until schedulled_alarms)a
+    @enforce_keys ~w(client_state loaded_until scheduled_alarms)a
     defstruct @enforce_keys
   end
 
   defmacro __using__(_opts) do
     quote do
       @moduledoc """
-      This module should be used to schedulle `X3m.System.Message` delivery
+      This module should be used to schedule `X3m.System.Message` delivery
       at some point in time in the future. Alarms are persisted so when process
       is respawned they can be reloaded into memory.
 
-      Not all schedulled alarms are kept in memory. They are loaded in bulks
+      Not all scheduled alarms are kept in memory. They are loaded in bulks
       each `in_memory_interval/0` milliseconds for next `2 * in_memory_interval/0` milliseconds.
 
-      If message with it's `X3m.System.Message.id` is already in memory (and schedulled for delivery)
+      If message with its `X3m.System.Message.id` is already in memory (and scheduled for delivery)
       it is ignored.
 
       When message is processed, `service_responded/2` callback is invoked. It should return either
@@ -98,17 +98,17 @@ defmodule X3m.System.Scheduller do
       """
       use GenServer
 
-      alias X3m.System.{Scheduller, Dispatcher, Message}
-      alias X3m.System.Scheduller.State
-      @behaviour Scheduller
+      alias X3m.System.{Scheduler, Dispatcher, Message}
+      alias X3m.System.Scheduler.State
+      @behaviour Scheduler
 
       @name __MODULE__
 
       @doc """
-      Spawns Scheduller with given `state`. That one is provided in all
+      Spawns Scheduler with given `state`. That one is provided in all
       callbacks as last parameter and can be used to provide Repo or any other detail needed.
 
-      When new Scheduller is spawned it calls `load_alarms/3` callback with
+      When new Scheduler is spawned it calls `load_alarms/3` callback with
       `load_from` set to `nil`.
       """
       @spec start_link(state :: any()) :: GenServer.on_start()
@@ -130,7 +130,7 @@ defmodule X3m.System.Scheduller do
 
         GenServer.call(
           @name,
-          {:schedulle_dispatch, msg, aggregate_id, dispatch_at, dispatch_in_ms}
+          {:schedule_dispatch, msg, aggregate_id, dispatch_at, dispatch_in_ms}
         )
       end
 
@@ -139,7 +139,7 @@ defmodule X3m.System.Scheduller do
 
         GenServer.call(
           @name,
-          {:schedulle_dispatch, msg, aggregate_id, dispatch_at, dispatch_in_ms}
+          {:schedule_dispatch, msg, aggregate_id, dispatch_at, dispatch_in_ms}
         )
       end
 
@@ -152,35 +152,35 @@ defmodule X3m.System.Scheduller do
       def init(client_state) do
         send(self(), :load_alarms)
 
-        {:ok, %State{client_state: client_state, loaded_until: nil, schedulled_alarms: %{}}}
+        {:ok, %State{client_state: client_state, loaded_until: nil, scheduled_alarms: %{}}}
       end
 
       @impl GenServer
       @doc false
       def handle_call(
-            {:schedulle_dispatch, %Message{} = msg, aggregate_id, dispatch_at, dispatch_in_ms},
+            {:schedule_dispatch, %Message{} = msg, aggregate_id, dispatch_at, dispatch_in_ms},
             _from,
             %State{} = state
           ) do
         msg = Message.assign(msg, :dispatch_at, dispatch_at)
         :ok = save_alarm(msg, aggregate_id, state.client_state)
 
-        schedulled_alarms =
+        scheduled_alarms =
           cond do
             dispatch_in_ms < 0 ->
               msg = Message.assign(msg, :late?, true)
               send(self(), {:dispatch, msg})
-              Map.put(state.schedulled_alarms, msg.id, msg)
+              Map.put(state.scheduled_alarms, msg.id, msg)
 
             DateTime.compare(state.loaded_until, dispatch_at) == :gt ->
               Process.send_after(self(), {:dispatch, msg}, dispatch_in_ms)
-              Map.put(state.schedulled_alarms, msg.id, msg)
+              Map.put(state.scheduled_alarms, msg.id, msg)
 
             true ->
-              state.schedulled_alarms
+              state.scheduled_alarms
           end
 
-        {:reply, :ok, %State{state | schedulled_alarms: schedulled_alarms}}
+        {:reply, :ok, %State{state | scheduled_alarms: scheduled_alarms}}
       end
 
       @impl GenServer
@@ -192,7 +192,7 @@ defmodule X3m.System.Scheduller do
 
         {:ok, alarms} = load_alarms(state.loaded_until, load_until, state.client_state)
 
-        schedulled_alarms =
+        scheduled_alarms =
           alarms
           |> Enum.reduce(%{}, fn %Message{} = msg, acc ->
             dispatch_in_ms = DateTime.diff(msg.assigns.dispatch_at, _now(), :millisecond)
@@ -209,12 +209,12 @@ defmodule X3m.System.Scheduller do
 
               true ->
                 :ok
-                acc.schedulled_alarms
+                acc.scheduled_alarms
             end
           end)
 
         Process.send_after(self(), :load_alarms, in_memory_interval())
-        {:noreply, %State{state | loaded_until: load_until, schedulled_alarms: schedulled_alarms}}
+        {:noreply, %State{state | loaded_until: load_until, scheduled_alarms: scheduled_alarms}}
       end
 
       def handle_info({:dispatch, msg}, %State{} = state) do
@@ -227,14 +227,14 @@ defmodule X3m.System.Scheduller do
           |> service_responded(state.client_state)
           |> case do
             :ok ->
-              {_, schedulled_alarms} = Map.pop(state.schedulled_alarms, msg.id)
-              {:noreply, %State{state | schedulled_alarms: schedulled_alarms}}
+              {_, scheduled_alarms} = Map.pop(state.scheduled_alarms, msg.id)
+              {:noreply, %State{state | scheduled_alarms: scheduled_alarms}}
 
             {:retry, in_ms, %Message{} = msg} ->
               Process.send_after(@name, {:dispatch, msg}, in_ms)
 
-              schedulled_alarms = Map.put(state.schedulled_alarms, msg.id, msg)
-              {:noreply, %State{state | schedulled_alarms: schedulled_alarms}}
+              scheduled_alarms = Map.put(state.scheduled_alarms, msg.id, msg)
+              {:noreply, %State{state | scheduled_alarms: scheduled_alarms}}
           end
         end)
 
