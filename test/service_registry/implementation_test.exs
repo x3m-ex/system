@@ -20,6 +20,20 @@ defmodule X3m.System.ServiceRegistry.ImplementationTest do
                   }
                 }
               }} = Impl.register_remote_services({:node1, services}, state)
+
+      # service registratin is idempotant
+      assert {:ok,
+              %State{
+                services: %State.Services{
+                  remote: %{
+                    svc1: %{node1: Mod1},
+                    svc2: %{node1: Mod1}
+                  },
+                  local: %{
+                    a: :b
+                  }
+                }
+              }} = Impl.register_remote_services({:node1, services}, state)
     end
 
     test "removes existing services for given node, but leaves services from other nodes" do

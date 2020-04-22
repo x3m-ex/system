@@ -26,6 +26,8 @@ defmodule X3m.System.ServiceRegistry do
   def init(:ok) do
     Process.flag(:trap_exit, true)
     :ok = _subscribe_for_service_events()
+    interval = 20_000
+    Process.send_after(self(), {:exchange_services, interval}, interval)
 
     {:ok, %State{services: %State.Services{local: %{}, remote: %{}}}}
   end
@@ -63,6 +65,18 @@ defmodule X3m.System.ServiceRegistry do
     services = %State.Services{state.services | local: all_local_services}
 
     {:noreply, %State{state | services: services}}
+  end
+
+  def handle_info({:exchange_services, interval}, %State{} = state) do
+    Logger.debug(fn -> "[Discovery] Exchanging services with cluster members..." end)
+    request = {:register_remote_services, {Node.self(), state.services.local}}
+
+    Node.list()
+    |> Enum.each(fn node -> send({__MODULE__, node}, request) end)
+
+    Process.send_after(self(), {:exchange_services, interval}, interval)
+
+    {:noreply, state}
   end
 
   def handle_info({:register_remote_services, {node, services}}, %State{} = state) do
