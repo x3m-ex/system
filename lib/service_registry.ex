@@ -68,7 +68,7 @@ defmodule X3m.System.ServiceRegistry do
   end
 
   def handle_info({:exchange_services, interval}, %State{} = state) do
-    Logger.debug(fn -> "[Discovery] Exchanging services with cluster members..." end)
+    # Logger.debug(fn -> "[Discovery] Exchanging services with cluster members..." end)
     request = {:register_remote_services, {Node.self(), state.services.local}}
 
     Node.list()
@@ -80,7 +80,7 @@ defmodule X3m.System.ServiceRegistry do
   end
 
   def handle_info({:register_remote_services, {node, services}}, %State{} = state) do
-    Logger.debug(fn -> "[Discovery] Registering local services for node #{inspect(node)}" end)
+    # Logger.debug(fn -> "[Discovery] Registering local services for node #{inspect(node)}" end)
     {:ok, %State{} = state} = Impl.register_remote_services({node, services}, state)
     {:noreply, state}
   end

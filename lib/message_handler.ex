@@ -99,7 +99,7 @@ defmodule X3m.System.MessageHandler do
             message
 
           error ->
-            error
+            X3m.System.Message.return(message, error)
         end
       end
 
@@ -137,7 +137,7 @@ defmodule X3m.System.MessageHandler do
             end
 
           error ->
-            error
+            X3m.System.Message.return(message, error)
         end
       end
 
@@ -224,7 +224,7 @@ defmodule X3m.System.MessageHandler do
           error ->
             Logger.error(fn -> "Error saving events #{inspect(error)}" end)
             Process.exit(pid, :kill)
-            X3m.System.Message.error(message, :internal_error)
+            error
         end
       end
 
