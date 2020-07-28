@@ -234,6 +234,11 @@ defmodule X3m.System.MessageHandler do
         {:ok, _} = @gen_aggregate_mod.commit(pid, transaction_id, message, last_event_number)
 
         Logger.info(fn -> "Successfull dry_run of events." end)
+
+        # If process was spawned for new aggregate, kill it
+        if last_event_number == -1,
+          do: Process.exit(pid, :kill)
+
         {:ok, message, last_event_number}
       end
 
@@ -247,6 +252,11 @@ defmodule X3m.System.MessageHandler do
         {:ok, _} = @gen_aggregate_mod.commit(pid, transaction_id, message, last_event_number)
 
         Logger.info(fn -> "Successfull verbose dry_run of events." end)
+
+        # If process was spawned for new aggregate, kill it
+        if last_event_number == -1,
+          do: Process.exit(pid, :kill)
+
         {:ok, message, last_event_number}
       end
 
