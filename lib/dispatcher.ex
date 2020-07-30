@@ -6,6 +6,7 @@ defmodule X3m.System.Dispatcher do
   def dispatch(%Message{} = message, opts \\ []) do
     timeout = Keyword.get(opts, :timeout, 5_000)
     mono_start = System.monotonic_time()
+    message = %{message | invoked_at: DateTime.utc_now(), reply_to: self()}
 
     Instrumenter.execute(
       :discovering_service,

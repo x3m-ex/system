@@ -231,6 +231,7 @@ defmodule X3m.System.Scheduler do
               {:noreply, %State{state | scheduled_alarms: scheduled_alarms}}
 
             {:retry, in_ms, %Message{} = msg} ->
+              msg = _retry_message(msg)
               Process.send_after(@name, {:dispatch, msg}, in_ms)
 
               scheduled_alarms = Map.put(state.scheduled_alarms, msg.id, msg)
@@ -239,6 +240,18 @@ defmodule X3m.System.Scheduler do
         end)
 
         {:noreply, state}
+      end
+
+      @spec _retry_message(Message.t()) :: Message.t()
+      defp _retry_message(%Message{} = msg) do
+        %{
+          msg
+          | request: nil,
+            valid?: true,
+            response: nil,
+            events: [],
+            halted?: false
+        }
       end
 
       @doc false
