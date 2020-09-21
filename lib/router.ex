@@ -156,6 +156,7 @@ defmodule X3m.System.Router do
 
         case apply(message_handler, f, [message]) do
           {:reply, %Message{} = message} ->
+            message = %Message{message | request: nil, events: []}
             send(message.reply_to, message)
 
             X3m.System.Instrumenter.execute(
