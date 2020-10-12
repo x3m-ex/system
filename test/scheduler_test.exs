@@ -5,6 +5,7 @@ defmodule X3m.System.SchedulerTest do
   alias X3m.System.Message
 
   setup do
+    Process.sleep(100)
     {:ok, _} = Scheduler.start_link(self())
     assert_receive {:load_alarms, nil, _load_until}
     :ok
