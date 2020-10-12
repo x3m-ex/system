@@ -8,8 +8,8 @@ defmodule X3m.System.AggregateGroup do
   @impl Supervisor
   def init({prefix, aggregate_mod}) do
     children = [
-      supervisor(AggregatePidManager, [prefix, aggregate_mod]),
-      worker(AggregatePidFacade, [aggregate_mod])
+      {AggregatePidManager, [prefix, aggregate_mod]},
+      {AggregatePidFacade, aggregate_mod}
     ]
 
     Supervisor.init(children, strategy: :one_for_one)

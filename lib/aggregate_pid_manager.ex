@@ -3,12 +3,12 @@ defmodule X3m.System.AggregatePidManager do
   alias X3m.System.AggregateRegistry, as: Registry
   alias X3m.System.AggregateSup
 
-  def start_link(prefix, aggregate_mod),
+  def start_link([prefix, aggregate_mod]),
     do: Supervisor.start_link(__MODULE__, {prefix, aggregate_mod}, name: name(aggregate_mod))
 
   def init({prefix, aggregate_mod}) do
     children = [
-      worker(Registry, [Registry.name(aggregate_mod)]),
+      {Registry, Registry.name(aggregate_mod)},
       {AggregateSup, [prefix, aggregate_mod]}
     ]
 

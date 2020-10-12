@@ -4,7 +4,7 @@ defmodule X3m.System.MixProject do
   def project do
     [
       app: :x3m_system,
-      version: "0.7.1",
+      version: "0.7.2",
       elixir: "~> 1.7",
       source_url: "https://github.com/x3m-ex/system",
       description: """
@@ -46,9 +46,9 @@ defmodule X3m.System.MixProject do
       {:tzdata, "~> 1.0", optional: true},
 
       # test dependencies
-      {:dialyxir, "~> 1.0.0-rc.6", only: [:test, :dev], runtime: false},
+      {:dialyxir, "~> 1.0.0", only: [:test, :dev], runtime: false},
       {:ex_doc, "~> 0.21", only: [:dev, :test], runtime: false},
-      {:excoveralls, "~> 0.12", only: :test}
+      {:excoveralls, "~> 0.13", only: :test}
     ]
   end
 
