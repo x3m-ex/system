@@ -144,8 +144,10 @@ defmodule X3m.System.Scheduler do
       end
 
       @spec _now() :: DateTime.t()
-      defp _now(),
-        do: DateTime.now!("Etc/UTC", Tzdata.TimeZoneDatabase)
+      defp _now() do
+        {:ok, time} = DateTime.now("Etc/UTC", Tzdata.TimeZoneDatabase)
+        time
+      end
 
       @impl GenServer
       @doc false
