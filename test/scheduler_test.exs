@@ -17,11 +17,11 @@ defmodule X3m.System.SchedulerTest do
       assert_receive {:save_alarm, %Message{id: ^id}, "aggregate_id"}
 
       assert_receive {:service_responded,
-                      %Message{id: id, response: {:service_unavailable, :wrong_service}}}
+                      %Message{id: ^id, response: {:service_unavailable, :wrong_service}}}
 
       assert_receive {:service_responded,
                       %Message{
-                        id: id,
+                        id: ^id,
                         assigns: %{redelivered?: true},
                         response: {:service_unavailable, :wrong_service}
                       }},
@@ -33,15 +33,15 @@ defmodule X3m.System.SchedulerTest do
       dispatch_at = DateTime.utc_now() |> DateTime.add(50, :millisecond)
       :ok = Scheduler.dispatch(msg, "aggregate_id", at: dispatch_at)
 
-      assert_receive {:save_alarm, %Message{id: ^id, assigns: %{dispatch_at: dispatch_at}},
+      assert_receive {:save_alarm, %Message{id: ^id, assigns: %{dispatch_at: ^dispatch_at}},
                       "aggregate_id"}
 
       assert_receive {:service_responded,
-                      %Message{id: id, response: {:service_unavailable, :wrong_service}}}
+                      %Message{id: ^id, response: {:service_unavailable, :wrong_service}}}
 
       assert_receive {:service_responded,
                       %Message{
-                        id: id,
+                        id: ^id,
                         assigns: %{redelivered?: true},
                         response: {:service_unavailable, :wrong_service}
                       }},

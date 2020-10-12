@@ -6,7 +6,7 @@ defmodule X3m.System.LocalAggregatesSupervision do
 
   @impl Supervisor
   def init({configuration_module, prefix}) do
-    children = [supervisor(configuration_module, [prefix])]
+    children = [{configuration_module, prefix}]
     Supervisor.init(children, strategy: :one_for_one)
   end
 
