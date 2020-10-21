@@ -6,7 +6,7 @@ defmodule X3m.System.ServiceRegistry.ImplementationTest do
   describe "register_remote_services/2" do
     test "adds new services in empty map" do
       services = [svc1: Mod1, svc2: Mod1]
-      state = %State{services: %State.Services{local: %{a: :b}, remote: %{}}}
+      state = %State{services: %State.Services{local: %{a: :b}, public: %{a: :b}, remote: %{}}}
 
       assert {:ok,
               %State{
@@ -16,6 +16,9 @@ defmodule X3m.System.ServiceRegistry.ImplementationTest do
                     svc2: %{node1: Mod1}
                   },
                   local: %{
+                    a: :b
+                  },
+                  public: %{
                     a: :b
                   }
                 }
@@ -31,6 +34,9 @@ defmodule X3m.System.ServiceRegistry.ImplementationTest do
                   },
                   local: %{
                     a: :b
+                  },
+                  public: %{
+                    a: :b
                   }
                 }
               }} = Impl.register_remote_services({:node1, services}, state)
@@ -45,7 +51,8 @@ defmodule X3m.System.ServiceRegistry.ImplementationTest do
             svc1: %{node1: Mod1},
             svc3: %{node2: Mod2}
           },
-          local: %{a: :b}
+          local: %{a: :b},
+          public: %{a: :b}
         }
       }
 
@@ -58,6 +65,9 @@ defmodule X3m.System.ServiceRegistry.ImplementationTest do
                     svc3: %{node2: Mod2}
                   },
                   local: %{
+                    a: :b
+                  },
+                  public: %{
                     a: :b
                   }
                 }

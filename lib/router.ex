@@ -5,6 +5,9 @@ defmodule X3m.System.Router do
   Each `service/2` macro registers system-wide service and function with
   documentation in module that `uses` this module.
 
+  `servicep/2` is considered as private service and is not introduced to other nodes
+  in the cluster.
+
   Service functions invoke function of the same name of specified module.
   If result of that invocation is `{:reply, %X3m.System.Message{}}`, 
   it sends message to `message.reply_to` pid.
@@ -29,12 +32,17 @@ defmodule X3m.System.Router do
         service :get_user, MessageHandler
 
         service :edit_user, MessageHandler
+
+        servicep :private_service, MessageHandler
       end
 
 
-  ### Getting registered services
+  ### Getting registered services (public, private, or by default all)
 
       iex> MyRouter.registered_services()
+      [create_user: 1, get_user: 1, edit_user: 1, private_service: 1]
+
+      iex> MyRouter.registered_services(:public)
       [create_user: 1, get_user: 1, edit_user: 1]
 
   ### Invoking service as a function
@@ -98,6 +106,59 @@ defmodule X3m.System.Router do
     end
   end
 
+  defmacro servicep(service_name, message_handler, f) do
+    quote do
+      case(@servicedoc) do
+        nil ->
+          @doc """
+          This service is not shared with other nodes!
+
+          Accepts `#{unquote(service_name)}` service call, routing it's `message` to 
+          `#{unquote(message_handler)}.#{unquote(f)}/1`.
+
+          If result of that invocation is `{:reply, %X3m.System.Message{}}`, 
+          it sends message to `message.reply_to` pid.
+
+          If result of invocation is `:noreply`, nothing is sent to that pid.
+
+          In any case function returns `:ok`.
+
+          ## Example:
+
+              iex> #{inspect(unquote(service_name))} |>
+              ...>   X3m.System.Message.new() |>
+              ...>   #{__MODULE__}.#{unquote(service_name)}()
+              :ok
+          """
+
+        other ->
+          @doc other
+      end
+
+      @x3m_servicep [{unquote(service_name), 1}]
+      @spec unquote(service_name)(Message.t()) :: :ok
+      def unquote(service_name)(%Message{service_name: unquote(service_name)} = message) do
+        Logger.metadata(message.logger_metadata)
+
+        X3m.System.Instrumenter.execute(:service_request_received, %{}, %{
+          service: unquote(service_name)
+        })
+
+        message
+        |> choose_node()
+        |> _invoke(unquote(message_handler), unquote(f), message)
+      end
+
+      @servicedoc nil
+    end
+  end
+
+  defmacro servicep(service_name, message_handler) do
+    quote do
+      servicep(unquote(service_name), unquote(message_handler), unquote(service_name))
+    end
+  end
+
   defmacro __using__(_opts) do
     quote do
       alias X3m.System.Router
@@ -111,29 +172,56 @@ defmodule X3m.System.Router do
         persist: true
       )
 
+      Module.register_attribute(
+        __MODULE__,
+        :x3m_servicep,
+        accumulate: true,
+        persist: true
+      )
+
       @servicedoc nil
 
       @doc !"""
-           Returns list of service functions with their arrity.
+           Returns list of public, private or all service functions with their arrity.
            """
-      @spec registered_services :: [{:atom, non_neg_integer}]
-      def registered_services do
+      @spec registered_services(:public | :private | :all) :: [{:atom, non_neg_integer}]
+      def registered_services(visibility \\ :all)
+
+      def registered_services(:public) do
         __MODULE__.__info__(:attributes)
         |> Keyword.get_values(:x3m_service)
         |> List.flatten()
       end
+
+      def registered_services(:private) do
+        __MODULE__.__info__(:attributes)
+        |> Keyword.get_values(:x3m_servicep)
+        |> List.flatten()
+      end
+
+      def registered_services(:all),
+        do: registered_services(:private) ++ registered_services(:public)
 
       @doc !"""
            Sends internal event for each service to be registered in runtime.
            """
       @spec register_services :: :ok
       def register_services do
-        services =
-          registered_services()
+        public_services =
+          registered_services(:public)
           |> Enum.map(fn {service, _arrity} -> {service, __MODULE__} end)
           |> Enum.into(%{})
 
-        X3m.System.Instrumenter.execute(:register_local_services, %{}, %{services: services})
+        private_services =
+          registered_services(:private)
+          |> Enum.map(fn {service, _arrity} -> {service, __MODULE__} end)
+          |> Enum.into(%{})
+
+        X3m.System.Instrumenter.execute(:register_local_services, %{}, %{
+          public: public_services,
+          private: private_services
+        })
+
         :ok
       end
 

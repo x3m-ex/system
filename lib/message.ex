@@ -61,8 +61,7 @@ defmodule X3m.System.Message do
   @doc """
   Creates new message with given `service_name` and provided `opts`:
 
-    * `id` - id of the message. If not provided it tries to find `request_id`
-      in `Logger.metadata`. If that one is also missing it generates random one.
+    * `id` - id of the message. If not provided it generates random one.
     * `correlation_id` - id of "conversation". If not provided it is set to `id`.
     * `causation_id` - id of message that "caused" this message. If not provided it is set to `id`.
     * `reply_to` - sets pid of process that expects response. If not provided it is set to `self()`.
@@ -71,7 +70,7 @@ defmodule X3m.System.Message do
   """
   @spec new(atom, Keyword.t()) :: __MODULE__.t()
   def new(service_name, opts \\ []) when is_atom(service_name) do
-    id = Keyword.get(opts, :id, _get_request_id())
+    id = Keyword.get(opts, :id) || gen_msg_id()
     correlation_id = Keyword.get(opts, :correlation_id, id)
     causation_id = Keyword.get(opts, :causation_id, correlation_id)
     dry_run = Keyword.get(opts, :dry_run, false)
@@ -230,12 +229,6 @@ defmodule X3m.System.Message do
         aggregate_meta = Map.put(message.aggregate_meta, :id, id)
         Map.put(message, :aggregate_meta, aggregate_meta)
     end
-  end
-
-  @spec _get_request_id :: String.t()
-  defp _get_request_id do
-    Logger.metadata()
-    |> Keyword.get(:request_id, gen_msg_id())
   end
 
   # taken from https://github.com/elixir-plug/plug/blob/master/lib/plug/request_id.ex

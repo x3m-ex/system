@@ -2,6 +2,8 @@ locals_without_parens = [
   # Router
   service: 2,
   service: 3,
+  servicep: 2,
+  servicep: 3,
 
   # MessageHandler
   on_new_aggregate: 1,

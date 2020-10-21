@@ -54,9 +54,9 @@ defmodule X3m.System.Dispatcher do
     _wait_for_response(message, timeout)
   end
 
-  defp _wait_for_response(message, timeout) do
+  defp _wait_for_response(%Message{id: message_id} = message, timeout) do
     receive do
-      %Message{} = message -> message
+      %Message{id: ^message_id} = message -> message
     after
       timeout ->
         response = Response.service_timeout(message.service_name, message.id, timeout)

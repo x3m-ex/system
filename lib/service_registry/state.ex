@@ -5,7 +5,7 @@ defmodule X3m.System.ServiceRegistry.State do
     @type remote_services() :: %{service_name() => %{node() => module :: atom()}}
     @type service_name() :: atom()
 
-    @enforce_keys ~w(local remote)a
+    @enforce_keys ~w(local public remote)a
     defstruct @enforce_keys
   end
 

@@ -1,3 +1,6 @@
+# 0.7.5
+  * Introduce servicep/2 macro for router.
+
 # 0.7.2
   * Fix warnings in elixir 1.11
 

@@ -11,14 +11,8 @@ defmodule X3m.System.ServiceRegistry do
     do: GenServer.call(__MODULE__, {:find_nodes_with_service, service})
 
   @doc false
-  def handle_event(
-        [:x3m, :system, :register_local_services],
-        _measurements,
-        %{services: services},
-        _config
-      ) do
-    send(__MODULE__, {:register_local_services, services})
-  end
+  def handle_event([:x3m, :system, :register_local_services], _measurements, payload, _config),
+    do: send(__MODULE__, {:register_local_services, payload})
 
   ## Server side
 
@@ -29,7 +23,7 @@ defmodule X3m.System.ServiceRegistry do
     interval = 20_000
     Process.send_after(self(), {:exchange_services, interval}, interval)
 
-    {:ok, %State{services: %State.Services{local: %{}, remote: %{}}}}
+    {:ok, %State{services: %State.Services{local: %{}, public: %{}, remote: %{}}}}
   end
 
   @impl GenServer
@@ -54,22 +48,30 @@ defmodule X3m.System.ServiceRegistry do
   def handle_info({:register_local_services, %{} = local_services}, state) do
     Logger.debug(fn -> "[Discovery] Registered local services #{inspect(local_services)}" end)
 
-    request = {:register_remote_services, {Node.self(), local_services}}
+    request = {:register_remote_services, {Node.self(), local_services.public}}
 
     Logger.debug(fn -> "[Discovery] Notifying cluster memebers of new local services" end)
 
     Node.list()
     |> Enum.each(fn node -> send({__MODULE__, node}, request) end)
 
-    all_local_services = Map.merge(state.services.local, local_services)
-    services = %State.Services{state.services | local: all_local_services}
+    all_local_services =
+      state.services.local
+      |> Map.merge(local_services.private)
+      |> Map.merge(local_services.public)
+
+    services = %State.Services{
+      state.services
+      | local: all_local_services,
+        public: local_services.public
+    }
 
     {:noreply, %State{state | services: services}}
   end
 
   def handle_info({:exchange_services, interval}, %State{} = state) do
     # Logger.debug(fn -> "[Discovery] Exchanging services with cluster members..." end)
-    request = {:register_remote_services, {Node.self(), state.services.local}}
+    request = {:register_remote_services, {Node.self(), state.services.public}}
 
     Node.list()
     |> Enum.each(fn node -> send({__MODULE__, node}, request) end)
@@ -95,10 +97,10 @@ defmodule X3m.System.ServiceRegistry do
 
   def handle_info(
         {:introduce_local_services, node},
-        %State{services: %State.Services{local: local_services}} = state
+        %State{services: %State.Services{public: public_services}} = state
       ) do
     Logger.debug(fn -> "[Discovery] Introducing local services to #{inspect(node)}" end)
-    request = {:register_remote_services, {Node.self(), local_services}}
+    request = {:register_remote_services, {Node.self(), public_services}}
     send({__MODULE__, node}, request)
     {:noreply, state}
   end
