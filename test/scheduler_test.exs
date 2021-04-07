@@ -15,15 +15,24 @@ defmodule X3m.System.SchedulerTest do
     test "accepts alarm in miliseconds" do
       %{id: id} = msg = Message.new(:wrong_service)
       :ok = Scheduler.dispatch(msg, "aggregate_id", in: 50)
-      assert_receive {:save_alarm, %Message{id: ^id}, "aggregate_id"}
 
-      assert_receive {:service_responded,
-                      %Message{id: ^id, response: {:service_unavailable, :wrong_service}}}
+      assert_receive {:save_alarm,
+                      %Message{
+                        id: ^id,
+                        assigns: %{dispatch_attempts: 0, injected_value: Scheduler}
+                      }, "aggregate_id"}
 
       assert_receive {:service_responded,
                       %Message{
                         id: ^id,
-                        assigns: %{redelivered?: true},
+                        assigns: %{dispatch_attempts: 1, injected_value: Scheduler},
+                        response: {:service_unavailable, :wrong_service}
+                      }}
+
+      assert_receive {:service_responded,
+                      %Message{
+                        id: ^id,
+                        assigns: %{redelivered?: true, dispatch_attempts: 2},
                         response: {:service_unavailable, :wrong_service}
                       }},
                      200
@@ -38,12 +47,16 @@ defmodule X3m.System.SchedulerTest do
                       "aggregate_id"}
 
       assert_receive {:service_responded,
-                      %Message{id: ^id, response: {:service_unavailable, :wrong_service}}}
+                      %Message{
+                        id: ^id,
+                        assigns: %{dispatch_attempts: 1},
+                        response: {:service_unavailable, :wrong_service}
+                      }}
 
       assert_receive {:service_responded,
                       %Message{
                         id: ^id,
-                        assigns: %{redelivered?: true},
+                        assigns: %{redelivered?: true, dispatch_attempts: 2},
                         response: {:service_unavailable, :wrong_service}
                       }},
                      200

@@ -3,10 +3,11 @@ defmodule X3m.System.Test.Scheduler do
   alias X3m.System.Message, as: SysMsg
 
   @impl X3m.System.Scheduler
-  @spec save_alarm(SysMsg.t(), String.t(), pid()) :: :ok
+  @spec save_alarm(SysMsg.t(), String.t(), pid()) :: {:ok, SysMsg.t()}
   def save_alarm(%SysMsg{} = msg, aggregate_id, test_pid) do
+    msg = SysMsg.assign(msg, :injected_value, __MODULE__)
     send(test_pid, {:save_alarm, msg, aggregate_id})
-    :ok
+    {:ok, msg}
   end
 
   @impl X3m.System.Scheduler

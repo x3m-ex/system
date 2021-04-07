@@ -22,12 +22,15 @@ defmodule X3m.System.Scheduler do
 
   3rd parameter (state) is the one that was set when Scheduler's `start_link/1` was
   called.
+
+  If `{:ok, X3m.System.Message.t()}` is returned, than that message will be dispatched instead
+  of original one. This can be used to inject something in message assigns during `save_alarm`.
   """
   @callback save_alarm(
               X3m.System.Message.t(),
               aggregate_id :: String.t(),
               state :: any()
-            ) :: :ok
+            ) :: :ok | {:ok, X3m.System.Message.t()}
 
   @doc """
   Load alarms callback is invoked on Scheduler's init with `load_from` as `nil`,
@@ -164,8 +167,18 @@ defmodule X3m.System.Scheduler do
             _from,
             %State{} = state
           ) do
-        msg = Message.assign(msg, :dispatch_at, dispatch_at)
-        :ok = save_alarm(msg, aggregate_id, state.client_state)
+        msg =
+          msg
+          |> Message.assign(:dispatch_at, dispatch_at)
+          |> Message.assign(:dispatch_attempts, 0)
+
+        msg =
+          msg
+          |> save_alarm(aggregate_id, state.client_state)
+          |> case do
+            :ok -> msg
+            {:ok, %Message{} = new_message} -> new_message
+          end
 
         scheduled_alarms =
           cond do
@@ -224,7 +237,10 @@ defmodule X3m.System.Scheduler do
           timeout = dispatch_timeout(msg)
           msg = %{msg | reply_to: self()}
 
+          attempts = msg.assigns[:dispatch_attempts] || 0
+
           msg
+          |> Message.assign(:dispatch_attempts, attempts + 1)
           |> Dispatcher.dispatch(timeout: timeout)
           |> service_responded(state.client_state)
           |> case do
