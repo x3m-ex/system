@@ -9,7 +9,7 @@ defmodule X3m.System.ServiceTelemetryHandler do
 
     config = %{service_registry: X3m.System.ServiceRegistry}
 
-    :telemetry.attach_many("x3m-system-node_handler", events, &handle_event/4, config)
+    :telemetry.attach_many("x3m-system-node_handler", events, &__MODULE__.handle_event/4, config)
   end
 
   @doc false

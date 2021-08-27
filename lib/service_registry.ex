@@ -122,6 +122,6 @@ defmodule X3m.System.ServiceRegistry do
       [:x3m, :system, :register_local_services]
     ]
 
-    :telemetry.attach_many("x3m-system-services", events, &handle_event/4, config)
+    :telemetry.attach_many("x3m-system-services", events, &__MODULE__.handle_event/4, config)
   end
 end
