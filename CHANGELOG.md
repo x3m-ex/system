@@ -1,3 +1,6 @@
+# 0.7.13
+  * Service router doesn't remove `events` from `Message` if `dry_run` was set to `:verbose`
+
 # 0.7.9
   * Add and maintain `dispatch_attempts` in SysMsg for scheduler
 
