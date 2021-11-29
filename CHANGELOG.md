@@ -1,3 +1,6 @@
+# 0.7.14
+  * Add `on_maybe_new_aggregate/2` macro for MessageHandler.
+
 # 0.7.13
   * Service router doesn't remove `events` from `Message` if `dry_run` was set to `:verbose`
 

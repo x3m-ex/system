@@ -28,6 +28,50 @@ defmodule X3m.System.MessageHandler do
     end
   end
 
+  defmacro on_maybe_new_aggregate(cmd, opts \\ []) do
+    generate_id_if_missing? = Keyword.get(opts, :generate_id_if_missing?, false)
+    id_field = Keyword.get(opts, :id, "id")
+    commit_timeout = Keyword.get(opts, :commit_timeout, 5_000)
+
+    quote do
+      @doc """
+      Handles `message` for existing aggregate with id specified in `message.raw_request`
+      under `#{inspect(unquote(id_field))}` key, preparing it's state and then proxing
+      both values to it. If aggregate doesn't exist, new one will be created.
+
+      It handles aggregate's response, processing any events it returned in response
+      `message.events` and then sending `message.response` to the caller process
+      specified in `message.reply_to`.
+
+      Successfull response in returning `X3m.System.Message` can be either 
+      `{:ok, aggr_ver}` or `{:created, aggr_id, aggr_ver}`, for
+      existing or newly created aggregate retrospectively.
+      """
+      @spec unquote(cmd)(X3m.System.Message.t()) :: {:reply, X3m.System.Message.t()}
+      def unquote(cmd)(%X3m.System.Message{} = message) do
+        case X3m.System.Message.prepare_aggregate_id(message, unquote(id_field),
+               generate_if_missing: unquote(generate_id_if_missing?)
+             ) do
+          %X3m.System.Message{halted?: true} = msg ->
+            msg
+
+          %X3m.System.Message{halted?: false} = msg ->
+            execute_on_aggregate(unquote(cmd), msg, commit_timeout: unquote(commit_timeout))
+            |> case do
+              %X3m.System.Message{response: {:error, :not_found}} ->
+                execute_on_new_aggregate(unquote(cmd), msg,
+                  commit_timeout: unquote(commit_timeout)
+                )
+
+              %X3m.System.Message{} = message ->
+                message
+            end
+        end
+        |> respond_on()
+      end
+    end
+  end
+
   defmacro on_aggregate(cmd, opts \\ []) do
     id_field = Keyword.get(opts, :id, "id")
     commit_timeout = Keyword.get(opts, :commit_timeout, 5_000)
