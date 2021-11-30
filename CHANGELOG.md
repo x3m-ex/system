@@ -1,3 +1,6 @@
+# 0.7.15
+  * Add `on_maybe_new_aggregate/2` in .formatter
+
 # 0.7.14
   * Add `on_maybe_new_aggregate/2` macro for MessageHandler.
 

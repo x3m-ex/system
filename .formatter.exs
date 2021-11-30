@@ -8,6 +8,8 @@ locals_without_parens = [
   # MessageHandler
   on_new_aggregate: 1,
   on_new_aggregate: 2,
+  on_maybe_new_aggregate: 1,
+  on_maybe_new_aggregate: 2,
   on_aggregate: 1,
   on_aggregate: 2,
 
