@@ -1,3 +1,7 @@
+# 0.7.16
+  * `execute_on_new_aggregate returns `{:ok, -1}` if aggregate returns `:ok` response
+    with empty `events`
+
 # 0.7.15
   * Add `on_maybe_new_aggregate/2` in .formatter
 

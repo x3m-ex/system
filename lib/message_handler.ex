@@ -131,6 +131,18 @@ defmodule X3m.System.MessageHandler do
             other -> message
           end
         else
+          {:noblock, %X3m.System.Message{response: :ok, events: []} = message, _state} ->
+            msg = "No events for new aggregate"
+            Logger.debug(msg)
+
+            @pid_facade_mod.exit_process(
+              @pid_facade_name,
+              id,
+              {:creation_aborted, msg}
+            )
+
+            %X3m.System.Message{message | response: {:ok, -1}}
+
           {:noblock, %X3m.System.Message{} = message, _state} ->
             Logger.warn(fn -> "New aggregate creation failed: #{inspect(message.response)}" end)
 
