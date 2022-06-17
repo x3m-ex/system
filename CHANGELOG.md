@@ -1,3 +1,14 @@
+# 0.7.17
+  * Add unload aggregate on event using MessageHandler macro option:
+  ```
+  use X3m.System.MessageHandler,
+    unload_aggregate_on: %{
+      events: %{
+        Event.Example => {:in, :timer.hours(1)}
+      }
+    }
+  ```
+
 # 0.7.16
   * `execute_on_new_aggregate returns `{:ok, -1}` if aggregate returns `:ok` response
     with empty `events`

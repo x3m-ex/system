@@ -58,6 +58,14 @@ defmodule X3m.System.AggregatePidFacade do
     {:noreply, state}
   end
 
+  @impl GenServer
+  def handle_info({:exit_process, pid, reason}, state) do
+    Logger.info("Killing process #{inspect(pid)}: #{inspect(reason)}")
+    AggregateSup.terminate_child(state.aggregate_sup, pid)
+
+    {:noreply, state}
+  end
+
   defp _get_pid(key, state, when_not_registered, opts) do
     case Registry.get(state.registry, key) do
       :error ->

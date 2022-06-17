@@ -113,6 +113,7 @@ defmodule X3m.System.MessageHandler do
       @pid_facade_mod Keyword.fetch!(unquote(opts), :pid_facade_mod)
       @pid_facade_name @pid_facade_mod.name(@aggregate_mod)
       @gen_aggregate_mod @pid_facade_mod.get_aggregate_mod()
+      @unload_aggregate_on Keyword.get(unquote(opts), :unload_aggregate_on, %{})
 
       defp aggregate_mod,
         do: @aggregate_mod
@@ -264,6 +265,31 @@ defmodule X3m.System.MessageHandler do
         end
       end
 
+      defp _schedule_process_teardown(pid, %X3m.System.Message{} = message) do
+        @unload_aggregate_on
+        |> Map.get(:events, %{})
+        |> Enum.each(fn {event, time} ->
+          _schedule_process_tear_down_on_events(message.events, event, time, pid)
+        end)
+      end
+
+      defp _schedule_process_tear_down_on_events([], _, _, _),
+        do: :ok
+
+      defp _schedule_process_tear_down_on_events([%{__struct__: event} | rest], event, time, pid) do
+        _create_tear_down_scheduler(pid, time, event)
+        _schedule_process_tear_down_on_events(rest, event, time, pid)
+      end
+
+      defp _schedule_process_tear_down_on_events([_ | rest], event, time, pid) do
+        _schedule_process_tear_down_on_events(rest, event, time, pid)
+      end
+
+      defp _create_tear_down_scheduler(pid, {:in, milliseconds}, event) do
+        reason = "Scheduled tear down of aggregate on #{inspect(event)}"
+        Process.send_after(@pid_facade_name, {:exit_process, pid, reason}, milliseconds)
+      end
+
       defp _apply_changes(pid, transaction_id, %X3m.System.Message{dry_run: false} = message) do
         case save_events(message) do
           {:ok, last_event_number} ->
@@ -275,6 +301,7 @@ defmodule X3m.System.MessageHandler do
             end)
 
             save_state(message.aggregate_meta.id, new_state, message)
+            _schedule_process_teardown(pid, message)
             {:ok, message, last_event_number}
 
           error ->
