@@ -101,7 +101,7 @@ defmodule X3m.System.MessageHandler do
   end
 
   defmacro __using__(opts) do
-    quote do
+    quote location: :keep do
       require Logger
       require X3m.System.MessageHandler
       import X3m.System.MessageHandler
@@ -135,24 +135,12 @@ defmodule X3m.System.MessageHandler do
           {:noblock, %X3m.System.Message{response: :ok, events: []} = message, _state} ->
             msg = "No events for new aggregate"
             Logger.debug(msg)
-
-            @pid_facade_mod.exit_process(
-              @pid_facade_name,
-              id,
-              {:creation_aborted, msg}
-            )
-
+            exit_process(id, {:creation_aborted, msg})
             %X3m.System.Message{message | response: {:ok, -1}}
 
           {:noblock, %X3m.System.Message{} = message, _state} ->
             Logger.warn(fn -> "New aggregate creation failed: #{inspect(message.response)}" end)
-
-            @pid_facade_mod.exit_process(
-              @pid_facade_name,
-              id,
-              {:creation_failed, message.response}
-            )
-
+            exit_process(id, {:creation_failed, message.response})
             message
 
           error ->
@@ -265,13 +253,23 @@ defmodule X3m.System.MessageHandler do
         end
       end
 
-      defp _schedule_process_teardown(pid, %X3m.System.Message{} = message) do
+      @spec _schedule_process_teardown(pid(), X3m.System.Message.t(), any()) ::
+              :skip | :unload | {:in, pos_integer()}
+      defp _schedule_process_teardown(pid, %X3m.System.Message{} = message, state) do
         @unload_aggregate_on
         |> Map.get(:events, %{})
         |> Enum.each(fn {event, time} ->
           _schedule_process_tear_down_on_events(message.events, event, time, pid)
         end)
+
+        _schedule_process_teardown_on_state(Map.get(@unload_aggregate_on, :state), state)
       end
+
+      defp _schedule_process_teardown_on_state(fun, state) when is_function(fun),
+        do: fun.(state)
+
+      defp _schedule_process_teardown_on_state(_, _),
+        do: :skip
 
       defp _schedule_process_tear_down_on_events([], _, _, _),
         do: :ok
@@ -301,7 +299,20 @@ defmodule X3m.System.MessageHandler do
             end)
 
             save_state(message.aggregate_meta.id, new_state, message)
-            _schedule_process_teardown(pid, message)
+
+            case _schedule_process_teardown(pid, message, new_state.client_state) do
+              :unload ->
+                reason = "Unloading aggregate because of it's state"
+                exit_process(message.aggregate_meta.id, {:normal, reason})
+
+              {:in, milliseconds} ->
+                reason = "Delayed unloading aggregate because of it's state"
+                Process.send_after(@pid_facade_name, {:exit_process, pid, reason}, milliseconds)
+
+              _ ->
+                :just_move_on
+            end
+
             {:ok, message, last_event_number}
 
           error ->

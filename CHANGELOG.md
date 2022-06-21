@@ -1,3 +1,16 @@
+# 0.7.18
+  * Add unload aggregate on it's state (after applying events) using MessageHandler macro option:
+  ```
+  use X3m.System.MessageHandler,
+    unload_aggregate_on: %{
+      state: &__MODULE__.unload_on_state/1
+    }
+
+  def unload_on_state(%ClientState{status: :completed}), do: :unload
+  def unload_on_state(%ClientState{status: :almost_completed}), do: {:in, :timer.hours(1)}
+  def unload_on_state(%ClientState{}), do: :skip
+  ```
+
 # 0.7.17
   * Add unload aggregate on event using MessageHandler macro option:
   ```
