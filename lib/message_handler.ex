@@ -265,8 +265,14 @@ defmodule X3m.System.MessageHandler do
         _schedule_process_teardown_on_state(Map.get(@unload_aggregate_on, :state), state)
       end
 
-      defp _schedule_process_teardown_on_state(fun, state) when is_function(fun),
-        do: fun.(state)
+      defp _schedule_process_teardown_on_state(fun, state) when is_function(fun) do
+        try do
+          fun.(state)
+        rescue
+          FunctionClauseError ->
+            :skip
+        end
+      end
 
       defp _schedule_process_teardown_on_state(_, _),
         do: :skip
@@ -309,7 +315,7 @@ defmodule X3m.System.MessageHandler do
                 reason = "Delayed unloading aggregate because of it's state"
                 Process.send_after(@pid_facade_name, {:exit_process, pid, reason}, milliseconds)
 
-              _ ->
+              :skip ->
                 :just_move_on
             end
 

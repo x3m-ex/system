@@ -1,3 +1,6 @@
+# 0.7.19
+  * No need for catch-all function when unloading aggregate on state
+
 # 0.7.18
   * Add unload aggregate on it's state (after applying events) using MessageHandler macro option:
   ```
