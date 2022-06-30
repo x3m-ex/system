@@ -1,3 +1,6 @@
+# 0.7.20
+  * Dispatcher creates temp proc when invoking local service (to avoid refc binary leaks)
+
 # 0.7.19
   * No need for catch-all function when unloading aggregate on state
 

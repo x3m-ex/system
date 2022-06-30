@@ -45,7 +45,12 @@ defmodule X3m.System.Dispatcher do
   end
 
   defp _dispatch(:local, mod, %Message{} = message, timeout) do
-    :ok = apply(mod, message.service_name, [message])
+    # if calling function does something with big binaries, they can leak if
+    # caller process is long-lived (refc binary leaks)
+    spawn(fn ->
+      :ok = apply(mod, message.service_name, [message])
+    end)
+
     _wait_for_response(message, timeout)
   end
 
