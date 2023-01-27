@@ -1,6 +1,26 @@
 defmodule X3m.System.Dispatcher do
   alias X3m.System.{Message, Response, Instrumenter, ServiceRegistry}
 
+  @spec authorized?(Message.t()) :: boolean() | {:service_unavailable, atom}
+  def authorized?(%Message{} = message) do
+    mono_start = System.monotonic_time()
+    message = %{message | invoked_at: DateTime.utc_now(), reply_to: self()}
+
+    Instrumenter.execute(
+      :checking_if_service_call_is_authorized,
+      %{start: DateTime.utc_now(), mono_start: mono_start},
+      %{message: message, caller_node: Node.self()}
+    )
+
+    case discover_service(message) do
+      {:unavailable, _message} ->
+        :service_unavailable
+
+      {node, mod} ->
+        _authorized?(node, mod, message)
+    end
+  end
+
   def dispatch(%Message{halted?: true} = message), do: message
 
   def dispatch(%Message{} = message, opts \\ []) do
@@ -43,6 +63,12 @@ defmodule X3m.System.Dispatcher do
       {:remote, nodes} -> Enum.random(nodes)
     end
   end
+
+  defp _authorized?(:local, mod, %Message{} = message),
+    do: apply(mod, :authorized?, [message])
+
+  defp _authorized?(node, mod, %Message{} = message),
+    do: :rpc.call(node, mod, :authorized?, [message])
 
   defp _dispatch(:local, mod, %Message{} = message, timeout) do
     # if calling function does something with big binaries, they can leak if

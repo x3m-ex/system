@@ -50,7 +50,7 @@ defmodule X3m.System.ServiceRegistry do
 
     request = {:register_remote_services, {Node.self(), local_services.public}}
 
-    Logger.debug(fn -> "[Discovery] Notifying cluster memebers of new local services" end)
+    Logger.debug(fn -> "[Discovery] Notifying cluster members of new local services" end)
 
     Node.list()
     |> Enum.each(fn node -> send({__MODULE__, node}, request) end)

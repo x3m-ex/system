@@ -9,7 +9,7 @@ defmodule X3m.System.Router do
   in the cluster.
 
   Service functions invoke function of the same name of specified module.
-  If result of that invocation is `{:reply, %X3m.System.Message{}}`, 
+  If result of that invocation is `{:reply, %X3m.System.Message{}}`,
   it sends message to `message.reply_to` pid.
 
   If result of invocation is `:noreply`, nothing is sent to that pid.
@@ -60,10 +60,10 @@ defmodule X3m.System.Router do
       case(@servicedoc) do
         nil ->
           @doc """
-          Accepts `#{unquote(service_name)}` service call, routing it's `message` to 
+          Accepts `#{unquote(service_name)}` service call, routing it's `message` to
           `#{unquote(message_handler)}.#{unquote(f)}/1`.
 
-          If result of that invocation is `{:reply, %X3m.System.Message{}}`, 
+          If result of that invocation is `{:reply, %X3m.System.Message{}}`,
           it sends message to `message.reply_to` pid.
 
           If result of invocation is `:noreply`, nothing is sent to that pid.
@@ -92,8 +92,17 @@ defmodule X3m.System.Router do
         })
 
         message
-        |> choose_node()
-        |> _invoke(unquote(message_handler), unquote(f), message)
+        |> authorize()
+        |> case do
+          :ok ->
+            message
+            |> choose_node()
+            |> _invoke(unquote(message_handler), unquote(f), message)
+
+          other ->
+            send(message.reply_to, Message.error(message, other))
+            :ok
+        end
       end
 
       @servicedoc nil
@@ -113,10 +122,10 @@ defmodule X3m.System.Router do
           @doc """
           This service is not shared with other nodes!
 
-          Accepts `#{unquote(service_name)}` service call, routing it's `message` to 
+          Accepts `#{unquote(service_name)}` service call, routing it's `message` to
           `#{unquote(message_handler)}.#{unquote(f)}/1`.
 
-          If result of that invocation is `{:reply, %X3m.System.Message{}}`, 
+          If result of that invocation is `{:reply, %X3m.System.Message{}}`,
           it sends message to `message.reply_to` pid.
 
           If result of invocation is `:noreply`, nothing is sent to that pid.
@@ -145,8 +154,17 @@ defmodule X3m.System.Router do
         })
 
         message
-        |> choose_node()
-        |> _invoke(unquote(message_handler), unquote(f), message)
+        |> authorize()
+        |> case do
+          :ok ->
+            message
+            |> choose_node()
+            |> _invoke(unquote(message_handler), unquote(f), message)
+
+          other ->
+            send(message.reply_to, Message.error(message, other))
+            :ok
+        end
       end
 
       @servicedoc nil
@@ -225,6 +243,9 @@ defmodule X3m.System.Router do
         :ok
       end
 
+      def authorized?(%Message{} = message),
+        do: authorize(message) == :ok
+
       @doc false
       @spec _invoke(:local | node(), atom, atom, Message.t()) :: :ok
       def _invoke(node, message_handler, f, message)
@@ -302,6 +323,27 @@ defmodule X3m.System.Router do
         do: :local
 
       defoverridable choose_node: 1
+
+      @before_compile X3m.System.Router
+    end
+  end
+
+  defmacro __before_compile__(_env) do
+    quote do
+      # Authorizes given `message`. Should return `:ok` if request is authorized,
+      # otherwise, response will be set as `Message.response` and will be returned to the caller
+      # immediately
+      #
+      # By default it returns `:forbidden` but it can/should be overridden
+      # at least for cases where service call should be processed.
+      #
+      # ```
+      # def authorize(%X3m.System.Message{service_name: :example_service, assigns: %{identity: %{admin?: true}}}),
+      #   do: :ok
+      # ```
+      @spec authorize(Message.t()) :: :local | node()
+      def authorize(_sys_msg),
+        do: :forbidden
     end
   end
 end
