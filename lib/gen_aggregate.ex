@@ -95,7 +95,13 @@ defmodule X3m.System.GenAggregate do
   @impl GenServer
   def handle_continue({:wait_for_commit, transaction_id, cmd, commit_timeout}, %State{} = state) do
     receive do
-      {:commit, ^transaction_id, %Message{} = message, last_version, from} ->
+      {:commit, ^transaction_id, %Message{dry_run: false} = message, last_version, from} ->
+        :ok =
+          apply(state.aggregate_mod, :commit, [
+            message,
+            state.aggregate_state.client_state
+          ])
+
         %X3m.System.Aggregate.State{} =
           aggregate_state =
           apply(state.aggregate_mod, :apply_events, [
@@ -115,6 +121,19 @@ defmodule X3m.System.GenAggregate do
         response = {:transaction_commited, transaction_id, aggregate_state}
         send(from, response)
 
+        {:noreply, state}
+
+      # if it was dry-run, no events need to be applied, aggregate just needs to rollback some side effects
+      # if they were produced while handling a command
+      {:commit, ^transaction_id, %Message{} = message, _last_version, from} ->
+        :ok =
+          apply(state.aggregate_mod, :rollback, [
+            message,
+            state.aggregate_state.client_state
+          ])
+
+        response = {:transaction_commited, transaction_id, state.aggregate_state}
+        send(from, response)
         {:noreply, state}
     after
       commit_timeout ->

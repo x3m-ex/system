@@ -1,3 +1,9 @@
+# 0.8.2
+
+- Add `Dispatcher.validate/1` function that will set `Message.dry_run` to `true` if it was `false`.
+- Add optional `Aggregate.rollback/2` callback that is invoked if message was dry run.
+- Add optional `Aggregate.commit/2` callback that is invoked if message wasn't dry run.
+
 # 0.8.1
 
 - Router calls `authorize/1` callback before it proceeds with service call.

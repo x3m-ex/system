@@ -43,7 +43,7 @@ defmodule X3m.System.MessageHandler do
       `message.events` and then sending `message.response` to the caller process
       specified in `message.reply_to`.
 
-      Successfull response in returning `X3m.System.Message` can be either 
+      Successfull response in returning `X3m.System.Message` can be either
       `{:ok, aggr_ver}` or `{:created, aggr_id, aggr_ver}`, for
       existing or newly created aggregate retrospectively.
       """

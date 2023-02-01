@@ -310,7 +310,7 @@ defmodule X3m.System.Router do
            This is optional callback. By default it will return `:local`,
            meaning that `sys_msg` will be handled by local module.
 
-           It can be overriden like:
+           It can be overridden like:
 
            ```
            def choose_node(%X3m.System.Message{}) do

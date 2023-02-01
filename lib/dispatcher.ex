@@ -21,6 +21,27 @@ defmodule X3m.System.Dispatcher do
     end
   end
 
+  @doc """
+  Sets `message.dru_run` to `true` if it was (by default) `false`
+  and dispatches service call.
+
+  Pay attention if you have some side effects (like persistence of unique values in DB)
+  in your command handling. Such validations should be either avoided or
+  Aggregate needs to implement `rollback/2` and `commit/2` callbacks.
+
+  If service call is valid, `message.response` will be in `{:ok, aggregate_version}` format,
+  otherwise response will have error message as it would have if dispatch was called.
+  """
+  @spec validate(Message.t()) :: Message.t()
+  def validate(%Message{dry_run: false} = message) do
+    message
+    |> Map.put(:dry_run, true)
+    |> dispatch()
+  end
+
+  def validate(%Message{} = message),
+    do: dispatch(message)
+
   def dispatch(%Message{halted?: true} = message), do: message
 
   def dispatch(%Message{} = message, opts \\ []) do

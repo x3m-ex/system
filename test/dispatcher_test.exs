@@ -37,6 +37,18 @@ defmodule X3m.System.DispatcherTest do
     assert Dispatcher.authorized?(_new_message(:wrong_service)) == :service_unavailable
   end
 
+  describe "validate/1" do
+    test "it sets dry_run to true before invoking dispatch if dry_run was false (default)" do
+      assert %Message{dry_run: true, response: {:ok, :from_first}} =
+               Dispatcher.validate(_new_message(:first))
+    end
+
+    test "it doesn't change dry_run if it wasn't false" do
+      assert %Message{dry_run: :verbose} =
+               Dispatcher.validate(_new_message(:first) |> Map.put(:dry_run, :verbose))
+    end
+  end
+
   defp _new_message(service_name) do
     Message.new(service_name, raw_request: %{test_pid: self()})
   end

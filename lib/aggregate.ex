@@ -113,6 +113,12 @@ defmodule X3m.System.Aggregate do
       def apply_event(_event, state),
         do: state
 
+      def commit(%X3m.System.Message{}, _client_state),
+        do: :ok
+
+      def rollback(%X3m.System.Message{}, _client_state),
+        do: :ok
+
       @spec _post_processor(
               {:block | :noblock, X3m.System.Message.t(), X3m.System.Aggregate.State.t()}
             ) ::
