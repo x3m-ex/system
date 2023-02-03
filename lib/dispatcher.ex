@@ -22,7 +22,7 @@ defmodule X3m.System.Dispatcher do
   end
 
   @doc """
-  Sets `message.dru_run` to `true` if it was (by default) `false`
+  Sets `message.dry_run` to `true` if it was (by default) `false`
   and dispatches service call.
 
   Pay attention if you have some side effects (like persistence of unique values in DB)
