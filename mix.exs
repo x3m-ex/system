@@ -46,7 +46,7 @@ defmodule X3m.System.MixProject do
       {:tzdata, "~> 1.0", optional: true},
 
       # test dependencies
-      {:dialyxir, "~> 1.1.0", only: [:test, :dev], runtime: false},
+      {:dialyxir, "~> 1.1", only: [:test, :dev], runtime: false},
       {:ex_doc, "~> 0.21", only: [:dev, :test], runtime: false},
       {:excoveralls, "~> 0.13", only: :test}
     ]
