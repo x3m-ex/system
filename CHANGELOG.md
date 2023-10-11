@@ -1,3 +1,7 @@
+# 0.8.3
+
+- Logger.warn -> Logger.warning
+
 # 0.8.2
 
 - Add `Dispatcher.validate/1` function that will set `Message.dry_run` to `true` if it was `false`.

@@ -139,7 +139,7 @@ defmodule X3m.System.MessageHandler do
             %X3m.System.Message{message | response: {:ok, -1}}
 
           {:noblock, %X3m.System.Message{} = message, _state} ->
-            Logger.warn(fn -> "New aggregate creation failed: #{inspect(message.response)}" end)
+            Logger.warning(fn -> "New aggregate creation failed: #{inspect(message.response)}" end)
             exit_process(id, {:creation_failed, message.response})
             message
 
@@ -248,7 +248,7 @@ defmodule X3m.System.MessageHandler do
             {:ok, pid}
 
           false ->
-            Logger.warn(fn -> "No events found for aggregate: #{id}" end)
+            Logger.warning(fn -> "No events found for aggregate: #{id}" end)
             {:error, :not_found}
         end
       end

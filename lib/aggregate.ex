@@ -16,7 +16,7 @@ defmodule X3m.System.Aggregate do
               {:block | :noblock, X3m.System.Message.t(), X3m.System.Aggregate.State.t()}
       def unquote(msg_name)(%X3m.System.Message{} = message, state) do
         if MapSet.member?(state.processed_messages, message.id) do
-          Logger.warn("This message was already processed by aggregate. Returning :ok")
+          Logger.warning("This message was already processed by aggregate. Returning :ok")
           message = X3m.System.Message.ok(message)
           {:noblock, message, state}
         else
@@ -43,7 +43,7 @@ defmodule X3m.System.Aggregate do
               {:block | :noblock, X3m.System.Message.t(), X3m.System.Aggregate.State.t()}
       def unquote(msg_name)(%X3m.System.Message{} = message, state) do
         if MapSet.member?(state.processed_messages, message.id) do
-          Logger.warn("This message was already processed by aggregate. Returning :ok")
+          Logger.warning("This message was already processed by aggregate. Returning :ok")
           message = X3m.System.Message.ok(message)
           {:noblock, message, state}
         else

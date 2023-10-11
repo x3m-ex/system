@@ -91,7 +91,7 @@ defmodule X3m.System.AggregateRegistry do
   def handle_info({:DOWN, ref, :process, pid, reason}, state) do
     case _get(state.ref_table, ref) do
       {:ok, key} ->
-        Logger.warn("Process #{inspect(pid)} went down: #{inspect(reason)}")
+        Logger.warning("Process #{inspect(pid)} went down: #{inspect(reason)}")
         :ets.delete(state.ref_table, ref)
         :ets.delete(state.pid_table, key)
     end

@@ -37,7 +37,7 @@ defmodule X3m.System.ServiceRegistry do
           {:remote, nodes}
 
         _ ->
-          Logger.warn(fn -> "[Discovery] Service #{service} NOT found!" end)
+          Logger.warning(fn -> "[Discovery] Service #{service} NOT found!" end)
           :not_found
       end
 
