@@ -5,7 +5,7 @@ defmodule X3m.System.MixProject do
     [
       app: :x3m_system,
       version: "0.8.3",
-      elixir: "~> 1.10",
+      elixir: "~> 1.11",
       source_url: "https://github.com/x3m-ex/system",
       description: """
       Building blocks for distributed systems
