@@ -251,7 +251,10 @@ defmodule X3m.System.Router do
       def _invoke(node, message_handler, f, message)
 
       def _invoke(:local, message_handler, f, message) do
-        Logger.metadata(message.logger_metadata)
+        message.logger_metadata
+        |> Keyword.put(:gl, Process.whereis(:user))
+        |> Logger.metadata()
+
         mono_start = System.monotonic_time()
 
         X3m.System.Instrumenter.execute(
