@@ -341,7 +341,7 @@ defmodule X3m.System.Router do
       # def authorize(%X3m.System.Message{service_name: :example_service, assigns: %{identity: %{admin?: true}}}),
       #   do: :ok
       # ```
-      @spec authorize(Message.t()) :: :local | node()
+      @spec authorize(Message.t()) :: :ok | :forbidden
       def authorize(_sys_msg),
         do: :forbidden
     end
