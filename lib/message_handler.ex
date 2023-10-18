@@ -140,6 +140,7 @@ defmodule X3m.System.MessageHandler do
 
           {:noblock, %X3m.System.Message{} = message, _state} ->
             Logger.warning(fn -> "New aggregate creation failed: #{inspect(message.response)}" end)
+
             exit_process(id, {:creation_failed, message.response})
             message
 
