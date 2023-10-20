@@ -1,3 +1,12 @@
+# 0.8.4
+
+- Bump elixir to 1.11
+- Fix return types in spec for `Router.authorize/1`
+- Update deps
+- Clean unused deps
+- Add `:user` process to Logger.metadata under `:gl` (group leader) key in
+  `_invoke/4` in Router to limit each node log output to its own STDOUT
+
 # 0.8.3
 
 - Logger.warn -> Logger.warning
