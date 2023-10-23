@@ -214,6 +214,18 @@ defmodule X3m.System.Router do
   end
 
   defmacro __using__(opts) do
+    ensure_local_logging? = Keyword.get(opts, :ensure_local_logging?, false)
+
+    unless is_boolean(ensure_local_logging?),
+      do:
+        raise(
+          ArgumentError,
+          """
+          `:ensure_local_logging?` is expect to be boolean!
+          Check that you are passing either atom `true` or `false`.
+          """
+        )
+
     quote do
       alias X3m.System.Router
       require Router
@@ -235,7 +247,7 @@ defmodule X3m.System.Router do
 
       @servicedoc nil
 
-      @ensure_local_logging Keyword.get(unquote(opts), :ensure_local_logging?, false)
+      @ensure_local_logging unquote(ensure_local_logging?)
 
       @doc !"""
            Returns list of public, private or all service functions with their arrity.
@@ -364,6 +376,8 @@ defmodule X3m.System.Router do
         do: :local
 
       @spec _set_logger_local_group_leader(keyword(), boolean()) :: keyword()
+      defp _set_logger_local_group_leader(logger_metadata, ensure_local_logging?)
+
       defp _set_logger_local_group_leader(logger_metadata, false),
         do: logger_metadata
 
