@@ -4,8 +4,11 @@
 - Fix return types in spec for `Router.authorize/1`
 - Update deps
 - Clean unused deps
-- Add `:user` process to Logger.metadata under `:gl` (group leader) key in
-  `_invoke/4` in Router to limit each node log output to its own STDOUT
+- Add optional `:ensure_local_logging?` config option when defining a Router to
+  limit each node log output to its own STDOUT
+  - If passed as `true` ensures log messages of called node are not shown in
+    caller node STDOUT
+  - If not passed defaults to `false`
 
 # 0.8.3
 
