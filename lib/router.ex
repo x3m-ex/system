@@ -36,6 +36,40 @@ defmodule X3m.System.Router do
         servicep :private_service, MessageHandler
       end
 
+  When defining a router you can pass `:ensure_local_logging?` argument in
+  options which is expected to be `boolean()`.
+  This argument is optional and if not passed is treated as `false` thus
+  ensuring default RELP behaviour is maintained.
+
+  When this argument is passed as `true`, log messages sent to stdout by the called node
+  will not be shown in the caller node stdout.
+
+  ## Examples
+
+  ### Defining router with default logger behaviour
+
+      defmodule MyRouter do
+        use X3m.System.Router, ensure_local_logging?: false
+
+        ...
+      end
+
+      is identical to
+
+      defmodule MyRouter do
+        use X3m.System.Router
+
+        ...
+      end
+
+  ### Defining router ensuring remote callers don't receive logger stdout
+
+      defmodule MyRouter do
+        use X3m.System.Router, ensure_local_logging?: true
+
+        ...
+      end
+
 
   ### Getting registered services (public, private, or by default all)
 
@@ -85,7 +119,9 @@ defmodule X3m.System.Router do
       @x3m_service [{unquote(service_name), 1}]
       @spec unquote(service_name)(Message.t()) :: :ok
       def unquote(service_name)(%Message{service_name: unquote(service_name)} = message) do
-        Logger.metadata(message.logger_metadata)
+        message.logger_metadata
+        |> _set_logger_local_group_leader(@ensure_local_logging)
+        |> Logger.metadata()
 
         X3m.System.Instrumenter.execute(:service_request_received, %{}, %{
           service: unquote(service_name)
@@ -177,7 +213,19 @@ defmodule X3m.System.Router do
     end
   end
 
-  defmacro __using__(_opts) do
+  defmacro __using__(opts) do
+    ensure_local_logging? = Keyword.get(opts, :ensure_local_logging?, false)
+
+    unless is_boolean(ensure_local_logging?),
+      do:
+        raise(
+          ArgumentError,
+          """
+          `:ensure_local_logging?` is expect to be boolean!
+          Check that you are passing either atom `true` or `false`.
+          """
+        )
+
     quote do
       alias X3m.System.Router
       require Router
@@ -198,6 +246,8 @@ defmodule X3m.System.Router do
       )
 
       @servicedoc nil
+
+      @ensure_local_logging unquote(ensure_local_logging?)
 
       @doc !"""
            Returns list of public, private or all service functions with their arrity.
@@ -251,7 +301,10 @@ defmodule X3m.System.Router do
       def _invoke(node, message_handler, f, message)
 
       def _invoke(:local, message_handler, f, message) do
-        Logger.metadata(message.logger_metadata)
+        message.logger_metadata
+        |> _set_logger_local_group_leader(@ensure_local_logging)
+        |> Logger.metadata()
+
         mono_start = System.monotonic_time()
 
         X3m.System.Instrumenter.execute(
@@ -322,6 +375,15 @@ defmodule X3m.System.Router do
       def choose_node(_sys_msg),
         do: :local
 
+      @spec _set_logger_local_group_leader(keyword(), boolean()) :: keyword()
+      defp _set_logger_local_group_leader(logger_metadata, ensure_local_logging?)
+
+      defp _set_logger_local_group_leader(logger_metadata, false),
+        do: logger_metadata
+
+      defp _set_logger_local_group_leader(logger_metadata, true),
+        do: Keyword.put(logger_metadata, :gl, Process.whereis(:user))
+
       defoverridable choose_node: 1
 
       @before_compile X3m.System.Router
@@ -341,7 +403,7 @@ defmodule X3m.System.Router do
       # def authorize(%X3m.System.Message{service_name: :example_service, assigns: %{identity: %{admin?: true}}}),
       #   do: :ok
       # ```
-      @spec authorize(Message.t()) :: :local | node()
+      @spec authorize(Message.t()) :: :ok | :forbidden
       def authorize(_sys_msg),
         do: :forbidden
     end
