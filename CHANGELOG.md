@@ -1,3 +1,9 @@
+# 0.8.5
+
+- Fix typo in raised ArgumentError if passed `:ensure_local_logging?` value is
+  not `boolean()`
+- Refactor internal function to eliminate dialyzer error from client apps
+
 # 0.8.4
 
 - Bump elixir to 1.11

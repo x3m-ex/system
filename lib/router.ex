@@ -120,7 +120,7 @@ defmodule X3m.System.Router do
       @spec unquote(service_name)(Message.t()) :: :ok
       def unquote(service_name)(%Message{service_name: unquote(service_name)} = message) do
         message.logger_metadata
-        |> _set_logger_local_group_leader(@ensure_local_logging)
+        |> _set_logger_local_group_leader()
         |> Logger.metadata()
 
         X3m.System.Instrumenter.execute(:service_request_received, %{}, %{
@@ -221,7 +221,7 @@ defmodule X3m.System.Router do
         raise(
           ArgumentError,
           """
-          `:ensure_local_logging?` is expect to be boolean!
+          `:ensure_local_logging?` is expected to be boolean!
           Check that you are passing either atom `true` or `false`.
           """
         )
@@ -302,7 +302,7 @@ defmodule X3m.System.Router do
 
       def _invoke(:local, message_handler, f, message) do
         message.logger_metadata
-        |> _set_logger_local_group_leader(@ensure_local_logging)
+        |> _set_logger_local_group_leader()
         |> Logger.metadata()
 
         mono_start = System.monotonic_time()
@@ -375,14 +375,12 @@ defmodule X3m.System.Router do
       def choose_node(_sys_msg),
         do: :local
 
-      @spec _set_logger_local_group_leader(keyword(), boolean()) :: keyword()
-      defp _set_logger_local_group_leader(logger_metadata, ensure_local_logging?)
-
-      defp _set_logger_local_group_leader(logger_metadata, false),
-        do: logger_metadata
-
-      defp _set_logger_local_group_leader(logger_metadata, true),
-        do: Keyword.put(logger_metadata, :gl, Process.whereis(:user))
+      @spec _set_logger_local_group_leader(keyword()) :: keyword()
+      defp _set_logger_local_group_leader(logger_metadata) do
+        if @ensure_local_logging,
+          do: Keyword.put(logger_metadata, :gl, Process.whereis(:user)),
+          else: logger_metadata
+      end
 
       defoverridable choose_node: 1
 
