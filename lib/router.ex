@@ -38,18 +38,18 @@ defmodule X3m.System.Router do
 
   When defining a router you can pass `:ensure_local_logging?` argument in
   options which is expected to be `boolean()`.
-  This argument is optional and if not passed is treated as `false` thus
-  ensuring default RELP behaviour is maintained.
+  This argument is optional and if not passed is treated as `true` thus
+  ensuring logs of the called node are not shown on the calling node.
 
-  When this argument is passed as `true`, log messages sent to stdout by the called node
-  will not be shown in the caller node stdout.
+  When this argument is passed as `false`, log messages sent to stdout by the called node
+  will be shown in the caller node stdout, thus keeping REPL behaviour is maintained.
 
   ## Examples
 
-  ### Defining router with default logger behaviour
+  ### Defining router ensuring remote callers don't receive logger stdout
 
       defmodule MyRouter do
-        use X3m.System.Router, ensure_local_logging?: false
+        use X3m.System.Router
 
         ...
       end
@@ -62,10 +62,10 @@ defmodule X3m.System.Router do
         ...
       end
 
-  ### Defining router ensuring remote callers don't receive logger stdout
+  ### Defining router with default logger behaviour
 
       defmodule MyRouter do
-        use X3m.System.Router, ensure_local_logging?: true
+        use X3m.System.Router, ensure_local_logging?: false
 
         ...
       end
@@ -214,7 +214,7 @@ defmodule X3m.System.Router do
   end
 
   defmacro __using__(opts) do
-    ensure_local_logging? = Keyword.get(opts, :ensure_local_logging?, false)
+    ensure_local_logging? = Keyword.get(opts, :ensure_local_logging?, true)
 
     unless is_boolean(ensure_local_logging?),
       do:

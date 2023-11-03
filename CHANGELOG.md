@@ -1,3 +1,8 @@
+# 0.8.6
+
+- Fix dialyzer error for `:ensure_local_logging?`
+- Change local logging to be turned on by default
+
 # 0.8.5
 
 - Fix typo in raised ArgumentError if passed `:ensure_local_logging?` value is
