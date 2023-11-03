@@ -4,7 +4,7 @@ defmodule X3m.System.MixProject do
   def project do
     [
       app: :x3m_system,
-      version: "0.8.5",
+      version: "0.8.6",
       elixir: "~> 1.11",
       source_url: "https://github.com/x3m-ex/system",
       description: """

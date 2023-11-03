@@ -38,18 +38,18 @@ defmodule X3m.System.Router do
 
   When defining a router you can pass `:ensure_local_logging?` argument in
   options which is expected to be `boolean()`.
-  This argument is optional and if not passed is treated as `false` thus
-  ensuring default RELP behaviour is maintained.
+  This argument is optional and if not passed is treated as `true` thus
+  ensuring logs of the called node are not shown on the calling node.
 
-  When this argument is passed as `true`, log messages sent to stdout by the called node
-  will not be shown in the caller node stdout.
+  When this argument is passed as `false`, log messages sent to stdout by the called node
+  will be shown in the caller node stdout, thus keeping REPL behaviour is maintained.
 
   ## Examples
 
-  ### Defining router with default logger behaviour
+  ### Defining router ensuring remote callers don't receive logger stdout
 
       defmodule MyRouter do
-        use X3m.System.Router, ensure_local_logging?: false
+        use X3m.System.Router
 
         ...
       end
@@ -62,10 +62,10 @@ defmodule X3m.System.Router do
         ...
       end
 
-  ### Defining router ensuring remote callers don't receive logger stdout
+  ### Defining router with default logger behaviour
 
       defmodule MyRouter do
-        use X3m.System.Router, ensure_local_logging?: true
+        use X3m.System.Router, ensure_local_logging?: false
 
         ...
       end
@@ -120,7 +120,7 @@ defmodule X3m.System.Router do
       @spec unquote(service_name)(Message.t()) :: :ok
       def unquote(service_name)(%Message{service_name: unquote(service_name)} = message) do
         message.logger_metadata
-        |> _set_logger_local_group_leader()
+        |> set_local_logging()
         |> Logger.metadata()
 
         X3m.System.Instrumenter.execute(:service_request_received, %{}, %{
@@ -214,7 +214,7 @@ defmodule X3m.System.Router do
   end
 
   defmacro __using__(opts) do
-    ensure_local_logging? = Keyword.get(opts, :ensure_local_logging?, false)
+    ensure_local_logging? = Keyword.get(opts, :ensure_local_logging?, true)
 
     unless is_boolean(ensure_local_logging?),
       do:
@@ -226,166 +226,173 @@ defmodule X3m.System.Router do
           """
         )
 
-    quote do
-      alias X3m.System.Router
-      require Router
-      import Router
-
-      Module.register_attribute(
-        __MODULE__,
-        :x3m_service,
-        accumulate: true,
-        persist: true
-      )
-
-      Module.register_attribute(
-        __MODULE__,
-        :x3m_servicep,
-        accumulate: true,
-        persist: true
-      )
-
-      @servicedoc nil
-
-      @ensure_local_logging unquote(ensure_local_logging?)
-
-      @doc !"""
-           Returns list of public, private or all service functions with their arrity.
-           """
-      @spec registered_services(:public | :private | :all) :: [{:atom, non_neg_integer}]
-      def registered_services(visibility \\ :all)
-
-      def registered_services(:public) do
-        __MODULE__.__info__(:attributes)
-        |> Keyword.get_values(:x3m_service)
-        |> List.flatten()
-      end
-
-      def registered_services(:private) do
-        __MODULE__.__info__(:attributes)
-        |> Keyword.get_values(:x3m_servicep)
-        |> List.flatten()
-      end
-
-      def registered_services(:all),
-        do: registered_services(:private) ++ registered_services(:public)
-
-      @doc !"""
-           Sends internal event for each service to be registered in runtime.
-           """
-      @spec register_services :: :ok
-      def register_services do
-        public_services =
-          registered_services(:public)
-          |> Enum.map(fn {service, _arrity} -> {service, __MODULE__} end)
-          |> Enum.into(%{})
-
-        private_services =
-          registered_services(:private)
-          |> Enum.map(fn {service, _arrity} -> {service, __MODULE__} end)
-          |> Enum.into(%{})
-
-        X3m.System.Instrumenter.execute(:register_local_services, %{}, %{
-          public: public_services,
-          private: private_services
-        })
-
-        :ok
-      end
-
-      def authorized?(%Message{} = message),
-        do: authorize(message) == :ok
-
-      @doc false
-      @spec _invoke(:local | node(), atom, atom, Message.t()) :: :ok
-      def _invoke(node, message_handler, f, message)
-
-      def _invoke(:local, message_handler, f, message) do
-        message.logger_metadata
-        |> _set_logger_local_group_leader()
-        |> Logger.metadata()
-
-        mono_start = System.monotonic_time()
-
-        X3m.System.Instrumenter.execute(
-          :invoking_service,
-          %{start: DateTime.utc_now(), mono_start: mono_start},
-          %{
-            node: Node.self(),
-            service: message.service_name
-          }
-        )
-
-        case apply(message_handler, f, [message]) do
-          {:reply, %Message{} = message} ->
-            message =
-              case message do
-                %Message{dry_run: :verbose} = msg ->
-                  %Message{msg | request: nil}
-
-                %Message{} = msg ->
-                  %Message{msg | request: nil, events: []}
-              end
-
-            send(message.reply_to, message)
-
-            X3m.System.Instrumenter.execute(
-              :service_responded,
-              %{
-                time: DateTime.utc_now(),
-                duration: X3m.System.Instrumenter.duration(mono_start)
-              },
-              %{message: message}
-            )
-
-            :ok
-
-          :noreply ->
-            :ok
+    logging_function =
+      quote do
+        if unquote(ensure_local_logging?) do
+          @spec set_local_logging(keyword()) :: keyword()
+          def set_local_logging(logger_metadata),
+            do: Keyword.put(logger_metadata, :gl, Process.whereis(:user))
+        else
+          @spec set_local_logging(keyword()) :: keyword()
+          def set_local_logging(logger_metadata),
+            do: logger_metadata
         end
       end
 
-      def _invoke(node, message_handler, f, message) do
-        true =
-          :rpc.cast(node, __MODULE__, :_invoke, [
-            :local,
-            message_handler,
-            f,
-            message
-          ])
+    module =
+      quote do
+        alias X3m.System.Router
+        require Router
+        import Router
 
-        :ok
+        Module.register_attribute(
+          __MODULE__,
+          :x3m_service,
+          accumulate: true,
+          persist: true
+        )
+
+        Module.register_attribute(
+          __MODULE__,
+          :x3m_servicep,
+          accumulate: true,
+          persist: true
+        )
+
+        @servicedoc nil
+
+        @doc !"""
+             Returns list of public, private or all service functions with their arrity.
+             """
+        @spec registered_services(:public | :private | :all) :: [{:atom, non_neg_integer}]
+        def registered_services(visibility \\ :all)
+
+        def registered_services(:public) do
+          __MODULE__.__info__(:attributes)
+          |> Keyword.get_values(:x3m_service)
+          |> List.flatten()
+        end
+
+        def registered_services(:private) do
+          __MODULE__.__info__(:attributes)
+          |> Keyword.get_values(:x3m_servicep)
+          |> List.flatten()
+        end
+
+        def registered_services(:all),
+          do: registered_services(:private) ++ registered_services(:public)
+
+        @doc !"""
+             Sends internal event for each service to be registered in runtime.
+             """
+        @spec register_services :: :ok
+        def register_services do
+          public_services =
+            registered_services(:public)
+            |> Enum.map(fn {service, _arrity} -> {service, __MODULE__} end)
+            |> Enum.into(%{})
+
+          private_services =
+            registered_services(:private)
+            |> Enum.map(fn {service, _arrity} -> {service, __MODULE__} end)
+            |> Enum.into(%{})
+
+          X3m.System.Instrumenter.execute(:register_local_services, %{}, %{
+            public: public_services,
+            private: private_services
+          })
+
+          :ok
+        end
+
+        def authorized?(%Message{} = message),
+          do: authorize(message) == :ok
+
+        @doc false
+        @spec _invoke(:local | node(), atom, atom, Message.t()) :: :ok
+        def _invoke(node, message_handler, f, message)
+
+        def _invoke(:local, message_handler, f, message) do
+          message.logger_metadata
+          |> set_local_logging()
+          |> Logger.metadata()
+
+          mono_start = System.monotonic_time()
+
+          X3m.System.Instrumenter.execute(
+            :invoking_service,
+            %{start: DateTime.utc_now(), mono_start: mono_start},
+            %{
+              node: Node.self(),
+              service: message.service_name
+            }
+          )
+
+          case apply(message_handler, f, [message]) do
+            {:reply, %Message{} = message} ->
+              message =
+                case message do
+                  %Message{dry_run: :verbose} = msg ->
+                    %Message{msg | request: nil}
+
+                  %Message{} = msg ->
+                    %Message{msg | request: nil, events: []}
+                end
+
+              send(message.reply_to, message)
+
+              X3m.System.Instrumenter.execute(
+                :service_responded,
+                %{
+                  time: DateTime.utc_now(),
+                  duration: X3m.System.Instrumenter.duration(mono_start)
+                },
+                %{message: message}
+              )
+
+              :ok
+
+            :noreply ->
+              :ok
+          end
+        end
+
+        def _invoke(node, message_handler, f, message) do
+          true =
+            :rpc.cast(node, __MODULE__, :_invoke, [
+              :local,
+              message_handler,
+              f,
+              message
+            ])
+
+          :ok
+        end
+
+        @doc !"""
+             Choose node on which MFA will be applied.
+
+             This is optional callback. By default it will return `:local`,
+             meaning that `sys_msg` will be handled by local module.
+
+             It can be overridden like:
+
+             ```
+             def choose_node(%X3m.System.Message{}) do
+               [:jobs_1@my_comp_name, :local] |> Enum.random()
+             end
+             ```
+             """
+        @spec choose_node(Message.t()) :: :local | node()
+        def choose_node(_sys_msg),
+          do: :local
+
+        defoverridable choose_node: 1
+
+        @before_compile X3m.System.Router
       end
 
-      @doc !"""
-           Choose node on which MFA will be applied.
-
-           This is optional callback. By default it will return `:local`,
-           meaning that `sys_msg` will be handled by local module.
-
-           It can be overridden like:
-
-           ```
-           def choose_node(%X3m.System.Message{}) do
-             [:jobs_1@my_comp_name, :local] |> Enum.random()
-           end
-           ```
-           """
-      @spec choose_node(Message.t()) :: :local | node()
-      def choose_node(_sys_msg),
-        do: :local
-
-      @spec _set_logger_local_group_leader(keyword()) :: keyword()
-      defp _set_logger_local_group_leader(logger_metadata) do
-        if @ensure_local_logging,
-          do: Keyword.put(logger_metadata, :gl, Process.whereis(:user)),
-          else: logger_metadata
-      end
-
-      defoverridable choose_node: 1
-
-      @before_compile X3m.System.Router
-    end
+    [module, logging_function]
   end
 
   defmacro __before_compile__(_env) do
