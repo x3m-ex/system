@@ -22,6 +22,7 @@ defmodule X3m.System.Message do
     * `aggregate_meta` - metadata for aggregate.
     * `valid?` - when set to `true` it means that raw_request was successfully validated and
       structered request is set to `request` field
+    * `origin_node` - Node.self() of invoker
     * `reply_to` - Pid of process that is waiting for response.
     * `halted?` - when set to `true` it means that response should be returned to the invoker
       without further processing of Message.
@@ -30,7 +31,7 @@ defmodule X3m.System.Message do
   alias X3m.System.Response
 
   @enforce_keys ~w(service_name id correlation_id causation_id invoked_at dry_run
-                   reply_to halted? raw_request request valid? response events
+                   origin_node reply_to halted? raw_request request valid? response events
                    aggregate_meta assigns logger_metadata)a
   defstruct @enforce_keys
 
@@ -49,6 +50,7 @@ defmodule X3m.System.Message do
           response: nil | Response.t(),
           events: [map],
           aggregate_meta: map,
+          origin_node: Node.t(),
           reply_to: pid,
           halted?: boolean
         }
@@ -91,6 +93,7 @@ defmodule X3m.System.Message do
       response: nil,
       events: [],
       aggregate_meta: %{},
+      origin_node: Node.self(),
       reply_to: reply_to,
       halted?: false,
       assigns: %{},

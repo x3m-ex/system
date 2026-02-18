@@ -124,7 +124,9 @@ defmodule X3m.System.Router do
         |> Logger.metadata()
 
         X3m.System.Instrumenter.execute(:service_request_received, %{}, %{
-          service: unquote(service_name)
+          service: unquote(service_name),
+          visibility: :public,
+          origin_node: message.origin_node
         })
 
         message
@@ -186,7 +188,9 @@ defmodule X3m.System.Router do
         Logger.metadata(message.logger_metadata)
 
         X3m.System.Instrumenter.execute(:service_request_received, %{}, %{
-          service: unquote(service_name)
+          service: unquote(service_name),
+          visibility: :private,
+          origin_node: message.origin_node
         })
 
         message
@@ -320,7 +324,7 @@ defmodule X3m.System.Router do
           mono_start = System.monotonic_time()
 
           X3m.System.Instrumenter.execute(
-            :invoking_service,
+            :executing_service,
             %{start: DateTime.utc_now(), mono_start: mono_start},
             %{
               node: Node.self(),
@@ -342,7 +346,7 @@ defmodule X3m.System.Router do
               send(message.reply_to, message)
 
               X3m.System.Instrumenter.execute(
-                :service_responded,
+                :execution_finished,
                 %{
                   time: DateTime.utc_now(),
                   duration: X3m.System.Instrumenter.duration(mono_start)

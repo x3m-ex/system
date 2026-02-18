@@ -1,3 +1,7 @@
+# 0.9.0
+
+- Breaking change in telemetry events from dispatcher and router
+
 # 0.8.6
 
 - Fix dialyzer error for `:ensure_local_logging?`
