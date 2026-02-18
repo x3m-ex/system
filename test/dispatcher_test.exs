@@ -65,8 +65,10 @@ defmodule X3m.System.DispatcherTest do
       refute_receive {^ref, :service_not_found}
       assert_receive {^ref, :service_found}
       refute_receive {^ref, :checking_if_service_call_is_authorized}
-      assert_receive {^ref, :service_request_received}
       assert_receive {^ref, :invoking_service}
+      assert_receive {^ref, :service_request_received}
+      assert_receive {^ref, :executing_service}
+      assert_receive {^ref, :execution_finished}
       assert_receive {^ref, :service_responded}
 
       :telemetry.detach(to_string(test_name))
@@ -87,8 +89,10 @@ defmodule X3m.System.DispatcherTest do
       assert_receive {^ref, :service_not_found}
       refute_receive {^ref, :service_found}
       refute_receive {^ref, :checking_if_service_call_is_authorized}
-      refute_receive {^ref, :service_request_received}
       refute_receive {^ref, :invoking_service}
+      refute_receive {^ref, :service_request_received}
+      refute_receive {^ref, :executing_service}
+      refute_receive {^ref, :execution_finished}
       refute_receive {^ref, :service_responded}
 
       :telemetry.detach(to_string(test_name))
@@ -109,8 +113,10 @@ defmodule X3m.System.DispatcherTest do
       refute_receive {^ref, :service_not_found}
       assert_receive {^ref, :service_found}
       refute_receive {^ref, :checking_if_service_call_is_authorized}
-      assert_receive {^ref, :service_request_received}
       assert_receive {^ref, :invoking_service}
+      assert_receive {^ref, :service_request_received}
+      assert_receive {^ref, :executing_service}
+      assert_receive {^ref, :execution_finished}
       assert_receive {^ref, :service_validation_responded}
 
       :telemetry.detach(to_string(test_name))
@@ -131,8 +137,10 @@ defmodule X3m.System.DispatcherTest do
       assert_receive {^ref, :service_not_found}
       refute_receive {^ref, :service_found}
       refute_receive {^ref, :checking_if_service_call_is_authorized}
-      refute_receive {^ref, :service_request_received}
       refute_receive {^ref, :invoking_service}
+      refute_receive {^ref, :service_request_received}
+      refute_receive {^ref, :executing_service}
+      refute_receive {^ref, :execution_finished}
       refute_receive {^ref, :service_validation_responded}
 
       :telemetry.detach(to_string(test_name))
@@ -153,8 +161,10 @@ defmodule X3m.System.DispatcherTest do
       refute_receive {^ref, :service_not_found}
       refute_receive {^ref, :service_found}
       assert_receive {^ref, :checking_if_service_call_is_authorized}
-      refute_receive {^ref, :service_request_received}
       refute_receive {^ref, :invoking_service}
+      refute_receive {^ref, :service_request_received}
+      refute_receive {^ref, :executing_service}
+      refute_receive {^ref, :execution_finished}
       refute_receive {^ref, :service_responded}
 
       :telemetry.detach(to_string(test_name))
@@ -175,8 +185,10 @@ defmodule X3m.System.DispatcherTest do
       refute_receive {^ref, :service_not_found}
       refute_receive {^ref, :service_found}
       assert_receive {^ref, :checking_if_service_call_is_authorized}
-      refute_receive {^ref, :service_request_received}
       refute_receive {^ref, :invoking_service}
+      refute_receive {^ref, :service_request_received}
+      refute_receive {^ref, :executing_service}
+      refute_receive {^ref, :execution_finished}
       refute_receive {^ref, :service_responded}
 
       :telemetry.detach(to_string(test_name))
@@ -191,9 +203,11 @@ defmodule X3m.System.DispatcherTest do
         [:x3m, :system, :service_not_found],
         [:x3m, :system, :service_found],
         [:x3m, :system, :checking_if_service_call_is_authorized],
-        [:x3m, :system, :service_request_received],
         [:x3m, :system, :invoking_service],
-        [:x3m, :system, :service_responded]
+        [:x3m, :system, :service_responded],
+        [:x3m, :system, :service_request_received],
+        [:x3m, :system, :executing_service],
+        [:x3m, :system, :execution_finished]
       ],
       __MODULE__.telemetry_handler(service_name, parent, ref),
       nil
@@ -231,8 +245,16 @@ defmodule X3m.System.DispatcherTest do
         send(parent, {ref, :service_request_received})
 
       [:x3m, :system, :invoking_service], _measurements, meta, _config ->
-        assert %{service: ^service_name} = meta
+        assert %{message: %Message{service_name: ^service_name}, caller_node: _} = meta
         send(parent, {ref, :invoking_service})
+
+      [:x3m, :system, :executing_service], _measurements, meta, _config ->
+        assert %{service: ^service_name} = meta
+        send(parent, {ref, :executing_service})
+
+      [:x3m, :system, :execution_finished], _measurements, meta, _config ->
+        assert %{message: %Message{service_name: ^service_name}} = meta
+        send(parent, {ref, :execution_finished})
 
       [:x3m, :system, :service_responded],
       measurements,

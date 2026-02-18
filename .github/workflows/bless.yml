@@ -5,40 +5,53 @@ on:
   pull_request:
     branches:
       - master
-env:
-  MIX_ENV: test
 
 jobs:
-  graph_conn:
-    name: Build and test
+  bless:
+    name: Bless
     runs-on: ubuntu-latest
     env:
-      ImageOS: ubuntu20
-    strategy:
-      matrix:
-        elixir: ["1.13", "1.14"]
-        erlang: ["23.3", "24.3", "25.3"]
+      MIX_ENV: test
 
     steps:
-      - uses: actions/checkout@v3
-      - name: Set up Elixir
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Determine the elixir version
+        run: echo "ELIXIR_VERSION=$(grep -h elixir .tool-versions | awk '{ print $2 }' | awk -F - '{print $1}')" >> $GITHUB_ENV
+
+      - name: Determine the otp version
+        run: echo "OTP_VERSION=$(grep -h erlang .tool-versions | awk '{ print $2 }')" >> $GITHUB_ENV
+
+      - name: Setup Elixir and Erlang versions
         uses: erlef/setup-beam@v1
         with:
-          elixir-version: ${{ matrix.elixir }}
-          otp-version: ${{ matrix.erlang }}
-      - name: Restore dependencies cache
-        uses: actions/cache@v3
+          elixir-version: ${{ env.ELIXIR_VERSION }}
+          otp-version: ${{ env.OTP_VERSION }}
+
+      - name: Restore the deps cache
+        uses: actions/cache@v4
+        id: deps-cache
         with:
           path: deps
-          key: ${{ runner.os }}-deps-${{ matrix.elixir }}-${{ matrix.erlang }}-${{ hashFiles('mix.lock') }}
-          restore-keys: ${{ runner.os }}-deps-${{ matrix.elixir }}-${{ matrix.erlang }}-
-      - name: Install dependencies
-        run: mix deps.get
-      - name: Restore builds cache
-        uses: actions/cache@v3
+          key: ${{ runner.os }}-${{ env.ELIXIR_VERSION }}-${{ env.OTP_VERSION }}-deps-mixlockhash-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
+          restore-keys: |
+            ${{ runner.os }}-${{ env.ELIXIR_VERSION }}-${{ env.OTP_VERSION }}-deps-
+
+      - name: Restore the _build cache
+        uses: actions/cache@v4
+        id: build-cache
         with:
-          path: _build/test
-          key: ${{ runner.os }}-build_test-${{ matrix.elixir }}-${{ matrix.erlang }}-${{ hashFiles('mix.lock') }}
-          restore-keys: ${{ runner.os }}-build_test-${{ matrix.elixir }}-${{ matrix.erlang }}-
-      - name: Bless
+          path: _build
+          key: ${{ runner.os }}-${{ env.ELIXIR_VERSION }}-${{ env.OTP_VERSION }}-${{ env.MIX_ENV }}-build-mixlockhash-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
+          restore-keys: |
+            ${{ runner.os }}-${{ env.ELIXIR_VERSION }}-${{ env.OTP_VERSION }}-${{ env.MIX_ENV }}-build-
+
+      - name: Fetch mix dependencies
+        run: |
+          mix local.rebar --force
+          mix local.hex --force
+          mix deps.get
+
+      - name: Full bless
         run: mix bless

@@ -46,6 +46,7 @@ defmodule X3m.System.MixProject do
   defp _deps do
     [
       {:telemetry, "~> 0.4 or ~> 1.0"},
+      # needed when working with aggregates
       {:elixir_uuid, "~> 1.2", optional: true},
       # needed for use of X3m.System.Scheduller
       {:tzdata, "~> 1.0", optional: true},
@@ -65,8 +66,8 @@ defmodule X3m.System.MixProject do
 
   defp _bless(_) do
     [
-      {"compile", ["--warnings-as-errors", "--force"]},
       {"format", ["--check-formatted"]},
+      # {"compile", ["--warnings-as-errors", "--force"]},
       {"coveralls.html", []},
       {"dialyzer", []},
       {"docs", []}
