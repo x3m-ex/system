@@ -45,7 +45,7 @@ defmodule X3m.System.ServiceRegistry do
   end
 
   @impl GenServer
-  def handle_info({:register_local_services, %{} = local_services}, state) do
+  def handle_info({:register_local_services, %{} = local_services}, %State{} = state) do
     Logger.debug(fn -> "[Discovery] Registered local services #{inspect(local_services)}" end)
 
     request = {:register_remote_services, {Node.self(), local_services.public}}
@@ -60,13 +60,13 @@ defmodule X3m.System.ServiceRegistry do
       |> Map.merge(local_services.private)
       |> Map.merge(local_services.public)
 
-    services = %State.Services{
+    services = %{
       state.services
       | local: all_local_services,
         public: local_services.public
     }
 
-    {:noreply, %State{state | services: services}}
+    {:noreply, %{state | services: services}}
   end
 
   def handle_info({:exchange_services, interval}, %State{} = state) do
@@ -87,12 +87,12 @@ defmodule X3m.System.ServiceRegistry do
     {:noreply, state}
   end
 
-  def handle_info({:unregister_node_services, node}, state) do
+  def handle_info({:unregister_node_services, node}, %State{} = state) do
     Logger.debug(fn -> "[Discovery] Unregistering node services #{inspect(node)}" end)
     remote_services = Impl.remove_remote_services(state.services.remote, node)
-    services = %State.Services{state.services | remote: remote_services}
+    services = %{state.services | remote: remote_services}
 
-    {:noreply, %State{state | services: services}}
+    {:noreply, %{state | services: services}}
   end
 
   def handle_info(

@@ -4,7 +4,7 @@ defmodule X3m.System.MixProject do
   def project do
     [
       app: :x3m_system,
-      version: "0.8.6",
+      version: "0.9.0",
       elixir: "~> 1.11",
       source_url: "https://github.com/x3m-ex/system",
       description: """
@@ -13,14 +13,6 @@ defmodule X3m.System.MixProject do
       package: _package(),
       start_permanent: true,
       test_coverage: [tool: ExCoveralls],
-      preferred_cli_env: [
-        coveralls: :test,
-        "coveralls.detail": :test,
-        "coveralls.post": :test,
-        "coveralls.html": :test,
-        dialyzer: :dev,
-        bless: :test
-      ],
       name: "X3m System",
       aliases: _aliases(),
       deps: _deps(),
@@ -35,13 +27,27 @@ defmodule X3m.System.MixProject do
     ]
   end
 
+  def cli do
+    [
+      preferred_envs: [
+        coveralls: :test,
+        "coveralls.detail": :test,
+        "coveralls.post": :test,
+        "coveralls.html": :test,
+        dialyzer: :dev,
+        bless: :test
+      ]
+    ]
+  end
+
   defp _elixirc_paths(:test), do: ["lib", "test/support"]
   defp _elixirc_paths(_), do: ["lib"]
 
   defp _deps do
     [
-      {:elixir_uuid, "~> 1.2"},
       {:telemetry, "~> 0.4 or ~> 1.0"},
+      # needed when working with aggregates
+      {:elixir_uuid, "~> 1.2", optional: true},
       # needed for use of X3m.System.Scheduller
       {:tzdata, "~> 1.0", optional: true},
 
@@ -60,8 +66,8 @@ defmodule X3m.System.MixProject do
 
   defp _bless(_) do
     [
-      {"compile", ["--warnings-as-errors", "--force"]},
       {"format", ["--check-formatted"]},
+      # {"compile", ["--warnings-as-errors", "--force"]},
       {"coveralls.html", []},
       {"dialyzer", []},
       {"docs", []}

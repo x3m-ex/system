@@ -72,7 +72,23 @@ defmodule X3m.System.Dispatcher do
           %{message: message, caller_node: Node.self(), service_node: node}
         )
 
-        _dispatch(node, mod, message, timeout)
+        mono_start = System.monotonic_time()
+
+        Instrumenter.execute(
+          :invoking_service,
+          %{start: DateTime.utc_now(), mono_start: mono_start},
+          %{message: message, caller_node: Node.self(), service_node: node}
+        )
+
+        message = _dispatch(node, mod, message, timeout)
+
+        Instrumenter.execute(
+          :service_responded,
+          %{time: DateTime.utc_now(), duration: Instrumenter.duration(mono_start)},
+          %{message: message, caller_node: Node.self(), service_node: node}
+        )
+
+        message
     end
   end
 
