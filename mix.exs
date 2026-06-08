@@ -4,11 +4,11 @@ defmodule X3m.System.MixProject do
   def project do
     [
       app: :x3m_system,
-      version: "0.9.0",
-      elixir: "~> 1.11",
+      version: "0.9.1",
+      elixir: "~> 1.17",
       source_url: "https://github.com/x3m-ex/system",
       description: """
-      Building blocks for distributed systems
+      Building blocks for distributed and/or CQRS/ES systems
       """,
       package: _package(),
       start_permanent: true,
@@ -16,6 +16,7 @@ defmodule X3m.System.MixProject do
       name: "X3m System",
       aliases: _aliases(),
       deps: _deps(),
+      dialyzer: [plt_add_apps: [:ex_unit, :local_cluster]],
       elixirc_paths: _elixirc_paths(Mix.env())
     ]
   end
@@ -52,6 +53,7 @@ defmodule X3m.System.MixProject do
       {:tzdata, "~> 1.0", optional: true},
 
       # test dependencies
+      {:local_cluster, "~> 2.0", only: [:test], runtime: false},
       {:dialyxir, "~> 1.1", only: [:test, :dev], runtime: false},
       {:ex_doc, "~> 0.21", only: [:dev, :test], runtime: false},
       {:excoveralls, "~> 0.13", only: :test}

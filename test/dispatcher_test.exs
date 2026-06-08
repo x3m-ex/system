@@ -223,27 +223,29 @@ defmodule X3m.System.DispatcherTest do
   end
 
   def telemetry_handler(service_name, parent, ref) do
+    caller_node = Node.self()
+
     fn
       [:x3m, :system, :discovering_service], _measurements, meta, _config ->
-        assert %{caller_node: :nonode@nohost, message: %Message{service_name: ^service_name}} =
+        assert %{caller_node: ^caller_node, message: %Message{service_name: ^service_name}} =
                  meta
 
         send(parent, {ref, :discovering_service})
 
       [:x3m, :system, :service_not_found], _measurements, meta, _config ->
-        assert %{caller_node: :nonode@nohost, message: %Message{service_name: ^service_name}} =
+        assert %{caller_node: ^caller_node, message: %Message{service_name: ^service_name}} =
                  meta
 
         send(parent, {ref, :service_not_found})
 
       [:x3m, :system, :service_found], _measurements, meta, _config ->
-        assert %{caller_node: :nonode@nohost, message: %Message{service_name: ^service_name}} =
+        assert %{caller_node: ^caller_node, message: %Message{service_name: ^service_name}} =
                  meta
 
         send(parent, {ref, :service_found})
 
       [:x3m, :system, :checking_if_service_call_is_authorized], _measurements, meta, _config ->
-        assert %{caller_node: :nonode@nohost, message: %Message{service_name: ^service_name}} =
+        assert %{caller_node: ^caller_node, message: %Message{service_name: ^service_name}} =
                  meta
 
         send(parent, {ref, :checking_if_service_call_is_authorized})

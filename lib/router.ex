@@ -398,22 +398,54 @@ defmodule X3m.System.Router do
     [module, logging_function]
   end
 
-  defmacro __before_compile__(_env) do
-    quote do
-      # Authorizes given `message`. Should return `:ok` if request is authorized,
-      # otherwise, response will be set as `Message.response` and will be returned to the caller
-      # immediately
-      #
-      # By default it returns `:forbidden` but it can/should be overridden
-      # at least for cases where service call should be processed.
-      #
-      # ```
-      # def authorize(%X3m.System.Message{service_name: :example_service, assigns: %{identity: %{admin?: true}}}),
-      #   do: :ok
-      # ```
-      @spec authorize(Message.t()) :: :ok | :forbidden
-      def authorize(_sys_msg),
-        do: :forbidden
+  defmacro __before_compile__(env) do
+    # Only inject the deny-by-default `authorize/1` clause when the client hasn't already
+    # defined its own catch-all. Otherwise our clause would be redundant and the compiler
+    # would warn (which fails builds run with `--warnings-as-errors`).
+    if _catch_all_authorize?(env.module) do
+      nil
+    else
+      quote do
+        # Authorizes given `message`. Should return `:ok` if request is authorized,
+        # otherwise, response will be set as `Message.response` and will be returned to the caller
+        # immediately
+        #
+        # By default it returns `:forbidden` but it can/should be overridden
+        # at least for cases where service call should be processed.
+        #
+        # ```
+        # def authorize(%X3m.System.Message{service_name: :example_service, assigns: %{identity: %{admin?: true}}}),
+        #   do: :ok
+        # ```
+        @spec authorize(Message.t()) :: :ok | :forbidden
+        def authorize(_sys_msg),
+          do: :forbidden
+      end
     end
   end
+
+  # coveralls-ignore-start
+  # These run only at compile time (during `__before_compile__` expansion), so the runtime
+  # coverage tool never exercises them; their behavior is covered by routers compiling with
+  # and without a catch-all `authorize/1`.
+
+  # Returns `true` if `module` already defines an unconditional catch-all `authorize/1`
+  # clause (a bare variable or `_` with no guard).
+  defp _catch_all_authorize?(module) do
+    if Module.defines?(module, {:authorize, 1}) do
+      {_version, _kind, _meta, clauses} = Module.get_definition(module, {:authorize, 1})
+      Enum.any?(clauses, &_catch_all_clause?/1)
+    else
+      false
+    end
+  end
+
+  defp _catch_all_clause?({_meta, [{name, _var_meta, context}], [] = _guards, _body})
+       when is_atom(name) and is_atom(context),
+       do: true
+
+  defp _catch_all_clause?(_clause),
+    do: false
+
+  # coveralls-ignore-stop
 end
