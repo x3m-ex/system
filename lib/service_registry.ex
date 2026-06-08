@@ -7,6 +7,13 @@ defmodule X3m.System.ServiceRegistry do
   def start_link(opts \\ []),
     do: GenServer.start_link(__MODULE__, :ok, [{:name, __MODULE__} | opts])
 
+  @doc """
+    {:remote,
+   %{
+     engine_1@localhost: Engine.X3m.Router,
+     engine_2@localhost: Engine.X3m.Router
+   }}
+  """
   def find_nodes_with_service(service),
     do: GenServer.call(__MODULE__, {:find_nodes_with_service, service})
 

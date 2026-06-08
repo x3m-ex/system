@@ -7,6 +7,7 @@ defmodule X3m.System.Application do
     X3m.System.ServiceTelemetryHandler.setup()
 
     children = [
+      {Task.Supervisor, name: X3m.System.TaskSupervisor},
       X3m.System.NodeMonitor,
       X3m.System.ServiceRegistry
     ]

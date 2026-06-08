@@ -27,7 +27,6 @@ defmodule X3m.System.Message do
     * `halted?` - when set to `true` it means that response should be returned to the invoker
       without further processing of Message.
   """
-  require Logger
   alias X3m.System.Response
 
   @enforce_keys ~w(service_name id correlation_id causation_id invoked_at dry_run

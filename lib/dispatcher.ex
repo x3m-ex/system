@@ -12,11 +12,14 @@ defmodule X3m.System.Dispatcher do
       %{message: message, caller_node: Node.self()}
     )
 
-    case discover_service(message) do
-      {:unavailable, _message} ->
+    message
+    |> discover_service()
+    |> case do
+      :not_found ->
         :service_unavailable
 
-      {node, mod} ->
+      # we can ask any node for authorization
+      [{node, mod} | _] ->
         _authorized?(node, mod, message)
     end
   end
@@ -55,8 +58,10 @@ defmodule X3m.System.Dispatcher do
       %{message: message, caller_node: Node.self()}
     )
 
-    case discover_service(message) do
-      {:unavailable, message} ->
+    message
+    |> discover_service()
+    |> case do
+      :not_found ->
         Instrumenter.execute(
           :service_not_found,
           %{time: DateTime.utc_now(), duration: Instrumenter.duration(mono_start)},
@@ -65,39 +70,45 @@ defmodule X3m.System.Dispatcher do
 
         _unavailable(message)
 
-      {node, mod} ->
-        Instrumenter.execute(
-          :service_found,
-          %{time: DateTime.utc_now(), duration: Instrumenter.duration(mono_start)},
-          %{message: message, caller_node: Node.self(), service_node: node}
-        )
-
-        mono_start = System.monotonic_time()
-
-        Instrumenter.execute(
-          :invoking_service,
-          %{start: DateTime.utc_now(), mono_start: mono_start},
-          %{message: message, caller_node: Node.self(), service_node: node}
-        )
-
-        message = _dispatch(node, mod, message, timeout)
-
-        Instrumenter.execute(
-          :service_responded,
-          %{time: DateTime.utc_now(), duration: Instrumenter.duration(mono_start)},
-          %{message: message, caller_node: Node.self(), service_node: node}
-        )
-
-        message
+      nodes ->
+        _try_on_nodes(nodes, message, fn node, mod, message ->
+          _dispatch(node, mod, message, timeout, mono_start)
+        end)
     end
   end
 
-  @spec discover_service(Message.t()) :: {:unavailable, Message.t()} | {node | :local, atom}
-  def discover_service(%Message{service_name: service} = message) do
-    case ServiceRegistry.find_nodes_with_service(service) do
-      :not_found -> {:unavailable, message}
-      {:local, {mod, _fun}} -> {:local, mod}
-      {:remote, nodes} -> Enum.random(nodes)
+  defp _try_on_nodes(nodes, message, fun) when is_list(nodes) do
+    {message, _} =
+      nodes
+      |> Enum.shuffle()
+      |> Enum.reduce_while({%Message{} = message, []}, fn
+        {node, mod}, {%Message{} = message, nodes} ->
+          node
+          |> fun.(mod, message)
+          |> case do
+            %Message{response: {:error, {:try_another_node, reason}}} = message ->
+              nodes = [{node, reason} | nodes]
+              message = %{message | response: {:error, {:no_nodes_available, nodes}}}
+              {:cont, {message, nodes}}
+
+            %Message{} = message ->
+              {:halt, {message, nil}}
+          end
+      end)
+
+    message
+  end
+
+  @spec discover_service(Message.t()) ::
+          :not_found
+          | [{:local | atom(), router_mod :: module()}]
+  def discover_service(%Message{service_name: service}) do
+    service
+    |> ServiceRegistry.find_nodes_with_service()
+    |> case do
+      :not_found -> :not_found
+      {:local, {mod, _fun}} -> [{:local, mod}]
+      {:remote, nodes} -> Enum.into(nodes, [])
     end
   end
 
@@ -107,10 +118,37 @@ defmodule X3m.System.Dispatcher do
   defp _authorized?(node, mod, %Message{} = message),
     do: :rpc.call(node, mod, :authorized?, [message])
 
+  defp _dispatch(node, mod, %Message{} = message, timeout, mono_start) do
+    Instrumenter.execute(
+      :service_found,
+      %{time: DateTime.utc_now(), duration: Instrumenter.duration(mono_start)},
+      %{message: message, caller_node: Node.self(), service_node: node}
+    )
+
+    mono_start = System.monotonic_time()
+
+    Instrumenter.execute(
+      :invoking_service,
+      %{start: DateTime.utc_now(), mono_start: mono_start},
+      %{message: message, caller_node: Node.self(), service_node: node}
+    )
+
+    message = _dispatch(node, mod, message, timeout)
+
+    Instrumenter.execute(
+      :service_responded,
+      %{time: DateTime.utc_now(), duration: Instrumenter.duration(mono_start)},
+      %{message: message, caller_node: Node.self(), service_node: node}
+    )
+
+    message
+  end
+
   defp _dispatch(:local, mod, %Message{} = message, timeout) do
     # if calling function does something with big binaries, they can leak if
     # caller process is long-lived (refc binary leaks)
-    spawn(fn ->
+    X3m.System.TaskSupervisor
+    |> Task.Supervisor.start_child(fn ->
       :ok = apply(mod, message.service_name, [message])
     end)
 

@@ -14,7 +14,7 @@ defmodule X3m.System.Aggregate do
     quote do
       @spec unquote(msg_name)(X3m.System.Message.t(), X3m.System.Aggregate.State.t()) ::
               {:block | :noblock, X3m.System.Message.t(), X3m.System.Aggregate.State.t()}
-      def unquote(msg_name)(%X3m.System.Message{} = message, state) do
+      def unquote(msg_name)(%X3m.System.Message{} = message, %State{} = state) do
         if MapSet.member?(state.processed_messages, message.id) do
           Logger.warning("This message was already processed by aggregate. Returning :ok")
           message = X3m.System.Message.ok(message)
@@ -41,7 +41,7 @@ defmodule X3m.System.Aggregate do
     quote do
       @spec unquote(msg_name)(X3m.System.Message.t(), X3m.System.Aggregate.State.t()) ::
               {:block | :noblock, X3m.System.Message.t(), X3m.System.Aggregate.State.t()}
-      def unquote(msg_name)(%X3m.System.Message{} = message, state) do
+      def unquote(msg_name)(%X3m.System.Message{} = message, %State{} = state) do
         if MapSet.member?(state.processed_messages, message.id) do
           Logger.warning("This message was already processed by aggregate. Returning :ok")
           message = X3m.System.Message.ok(message)
@@ -87,7 +87,7 @@ defmodule X3m.System.Aggregate do
         new_client_state = apply_event(event, state.client_state)
 
         processed_messages =
-          if id = processed_message_id(metadata) do
+          if id = apply(__MODULE__, :processed_message_id, [metadata]) do
             MapSet.put(state.processed_messages, id)
           else
             state.processed_messages

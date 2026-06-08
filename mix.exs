@@ -34,7 +34,7 @@ defmodule X3m.System.MixProject do
         "coveralls.detail": :test,
         "coveralls.post": :test,
         "coveralls.html": :test,
-        dialyzer: :dev,
+        dialyzer: :test,
         bless: :test
       ]
     ]
@@ -67,7 +67,7 @@ defmodule X3m.System.MixProject do
   defp _bless(_) do
     [
       {"format", ["--check-formatted"]},
-      # {"compile", ["--warnings-as-errors", "--force"]},
+      {"compile", ["--warnings-as-errors", "--force"]},
       {"coveralls.html", []},
       {"dialyzer", []},
       {"docs", []}

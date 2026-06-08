@@ -86,7 +86,6 @@ defmodule X3m.System.Router do
       ...>   MyRouter.create_user()
       :ok
   """
-  require Logger
   alias X3m.System.Message
 
   defmacro service(service_name, message_handler, f) do
@@ -129,8 +128,8 @@ defmodule X3m.System.Router do
           origin_node: message.origin_node
         })
 
-        message
-        |> authorize()
+        __MODULE__
+        |> apply(:authorize, [message])
         |> case do
           :ok ->
             message
@@ -193,8 +192,8 @@ defmodule X3m.System.Router do
           origin_node: message.origin_node
         })
 
-        message
-        |> authorize()
+        __MODULE__
+        |> apply(:authorize, [message])
         |> case do
           :ok ->
             message

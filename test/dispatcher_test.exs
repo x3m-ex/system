@@ -19,6 +19,13 @@ defmodule X3m.System.DispatcherTest do
              Dispatcher.dispatch(msg)
   end
 
+  test "node can't process request" do
+    msg = _new_message(:try_another_node)
+
+    assert %Message{response: {:error, {:no_nodes_available, [local: :quorum_not_met]}}} =
+             Dispatcher.dispatch(msg)
+  end
+
   test "invoke local service" do
     msg = _new_message(:first)
     assert %Message{response: {:ok, :from_first}} = Dispatcher.dispatch(msg)
@@ -32,6 +39,7 @@ defmodule X3m.System.DispatcherTest do
   test "if service call is authorized" do
     assert Dispatcher.authorized?(_new_message(:first)) == true
     assert Dispatcher.authorized?(_new_message(:private_service)) == true
+    assert Dispatcher.authorized?(_new_message(:try_another_node)) == true
     assert Dispatcher.authorized?(_new_message(:unauthorized_service)) == false
     assert Dispatcher.authorized?(_new_message(:custom_unauthorized_service)) == false
     assert Dispatcher.authorized?(_new_message(:wrong_service)) == :service_unavailable

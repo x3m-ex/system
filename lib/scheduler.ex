@@ -173,8 +173,8 @@ defmodule X3m.System.Scheduler do
           |> Message.assign(:dispatch_attempts, 0)
 
         msg =
-          msg
-          |> save_alarm(aggregate_id, state.client_state)
+          __MODULE__
+          |> apply(:save_alarm, [msg, aggregate_id, state.client_state])
           |> case do
             :ok -> msg
             {:ok, %Message{} = new_message} -> new_message
