@@ -21,7 +21,7 @@ defmodule X3m.System.MixProject do
       docs: _docs(),
       aliases: _aliases(),
       deps: _deps(),
-      dialyzer: [plt_add_apps: [:ex_unit, :local_cluster]],
+      dialyzer: [plt_add_apps: [:ex_unit, :local_cluster, :ecto]],
       elixirc_paths: _elixirc_paths(Mix.env())
     ]
   end
@@ -53,7 +53,8 @@ defmodule X3m.System.MixProject do
           X3m.System.MessageHandler,
           X3m.System.Aggregate,
           X3m.System.Aggregate.State,
-          X3m.System.Aggregate.Repo
+          X3m.System.Aggregate.Repo,
+          X3m.System.Aggregate.TestSupport
         ],
         Scheduling: [
           X3m.System.Scheduler
@@ -95,6 +96,7 @@ defmodule X3m.System.MixProject do
       {:telemetry, "~> 0.4 or ~> 1.0"},
       # needed when working with aggregates
       {:elixir_uuid, "~> 1.2", optional: true},
+      {:ecto, "~> 3.0", only: :test},
 
       # test dependencies
       {:local_cluster, "~> 2.0", only: [:test], runtime: false},
