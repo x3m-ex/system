@@ -1,12 +1,16 @@
 defmodule X3m.System.MixProject do
   use Mix.Project
 
+  @version "0.9.1"
+  @source_url "https://github.com/x3m-ex/system"
+
   def project do
     [
       app: :x3m_system,
-      version: "0.9.1",
+      version: @version,
       elixir: "~> 1.17",
-      source_url: "https://github.com/x3m-ex/system",
+      source_url: @source_url,
+      homepage_url: @source_url,
       description: """
       Building blocks for distributed and/or CQRS/ES systems
       """,
@@ -14,10 +18,50 @@ defmodule X3m.System.MixProject do
       start_permanent: true,
       test_coverage: [tool: ExCoveralls],
       name: "X3m System",
+      docs: _docs(),
       aliases: _aliases(),
       deps: _deps(),
       dialyzer: [plt_add_apps: [:ex_unit, :local_cluster]],
       elixirc_paths: _elixirc_paths(Mix.env())
+    ]
+  end
+
+  defp _docs do
+    [
+      main: "readme",
+      source_ref: "v#{@version}",
+      extras: [
+        "README.md",
+        "guides/getting-started.md",
+        "guides/messaging.md",
+        "guides/aggregates-and-event-sourcing.md",
+        "guides/distribution.md",
+        "guides/scheduling.md",
+        "CHANGELOG.md"
+      ],
+      groups_for_extras: [
+        Guides: ~r"guides/"
+      ],
+      groups_for_modules: [
+        Messaging: [
+          X3m.System.Message,
+          X3m.System.Dispatcher,
+          X3m.System.Router,
+          X3m.System.Response
+        ],
+        "Aggregates & Event Sourcing": [
+          X3m.System.MessageHandler,
+          X3m.System.Aggregate,
+          X3m.System.Aggregate.Repo
+        ],
+        Scheduling: [
+          X3m.System.Scheduler
+        ],
+        Setup: [
+          X3m.System.LocalAggregates,
+          X3m.System.LocalAggregatesSupervision
+        ]
+      ]
     ]
   end
 
@@ -35,6 +79,7 @@ defmodule X3m.System.MixProject do
         "coveralls.detail": :test,
         "coveralls.post": :test,
         "coveralls.html": :test,
+        docs: :dev,
         dialyzer: :test,
         bless: :test
       ]
@@ -84,10 +129,18 @@ defmodule X3m.System.MixProject do
 
   defp _package do
     [
-      files: [".formatter.exs", "lib", "mix.exs", "README*", "LICENSE*"],
+      files: [
+        ".formatter.exs",
+        "lib",
+        "guides",
+        "mix.exs",
+        "README*",
+        "CHANGELOG*",
+        "LICENSE*"
+      ],
       maintainers: ["Milan Burmaja"],
       licenses: ["MIT"],
-      links: %{"GitHub" => "https://github.com/x3m-ex/system"}
+      links: %{"GitHub" => @source_url}
     ]
   end
 end

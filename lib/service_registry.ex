@@ -1,4 +1,9 @@
 defmodule X3m.System.ServiceRegistry do
+  @moduledoc !"""
+             Internal. Cluster-wide registry of which node offers which service; exchanges
+             local/remote service maps between nodes and answers discovery queries from
+             `X3m.System.Dispatcher`.
+             """
   use GenServer
   require Logger
   alias X3m.System.ServiceRegistry.Implementation, as: Impl

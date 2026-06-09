@@ -1,10 +1,16 @@
 defmodule X3m.System.GenAggregate do
+  @moduledoc !"""
+             Internal. GenServer hosting a single aggregate instance: applies event
+             streams, runs commands against the aggregate module and manages the
+             block/commit transaction protocol.
+             """
   use GenServer, restart: :transient
 
   alias X3m.System.Message
   @behaviour X3m.System.GenAggregateMod
 
   defmodule State do
+    @moduledoc !"Internal. State of a `X3m.System.GenAggregate` process."
     @enforce_keys ~w(aggregate_mod aggregate_state commit_timeout)a
     defstruct @enforce_keys
   end

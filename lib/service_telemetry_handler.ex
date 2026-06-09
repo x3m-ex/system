@@ -1,4 +1,8 @@
 defmodule X3m.System.ServiceTelemetryHandler do
+  @moduledoc !"""
+             Internal. Attaches to node up/down telemetry events and tells the service
+             registry to introduce or unregister a node's services.
+             """
   require Logger
 
   def setup do

@@ -46,7 +46,9 @@ defmodule X3m.System.Router do
 
   ## Examples
 
-  ### Defining router ensuring remote callers don't receive logger stdout
+  ### Defining a router ensuring remote callers don't receive logger stdout
+
+  This is the default behaviour, so
 
       defmodule MyRouter do
         use X3m.System.Router
@@ -54,15 +56,19 @@ defmodule X3m.System.Router do
         ...
       end
 
-      is identical to
+  is identical to
 
       defmodule MyRouter do
-        use X3m.System.Router
+        use X3m.System.Router, ensure_local_logging?: true
 
         ...
       end
 
-  ### Defining router with default logger behaviour
+  ### Defining a router that keeps REPL logging behaviour
+
+  Pass `ensure_local_logging?: false` so log messages emitted by the called node are
+  shown in the *caller* node's stdout (useful when driving services from an `iex`
+  session):
 
       defmodule MyRouter do
         use X3m.System.Router, ensure_local_logging?: false

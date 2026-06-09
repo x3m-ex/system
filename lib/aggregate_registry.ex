@@ -1,7 +1,8 @@
 defmodule X3m.System.AggregateRegistry do
-  @moduledoc """
-  Keeps track of registered aggregate pids.
-  """
+  @moduledoc !"""
+             Internal. Keeps track of registered aggregate pids (per aggregate module) in
+             ETS, demonitoring and dropping them when the processes go down.
+             """
 
   require Logger
   use GenServer

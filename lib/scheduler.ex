@@ -72,6 +72,7 @@ defmodule X3m.System.Scheduler do
   @optional_callbacks in_memory_interval: 0, dispatch_timeout: 1
 
   defmodule State do
+    @moduledoc !"Internal. State of a `X3m.System.Scheduler` GenServer."
     @type t() :: %__MODULE__{
             client_state: any(),
             loaded_until: nil | DateTime.t(),

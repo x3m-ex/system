@@ -114,7 +114,12 @@ defmodule X3m.System.Message do
     )
   end
 
-  @spec to_service(t(), atom) :: t()
+  @doc """
+  Returns `sys_msg` re-targeted at a different `service_name`, leaving its ids,
+  payload and assigns intact. Useful for re-dispatching the same request to another
+  service.
+  """
+  @spec to_service(t(), service_name :: atom) :: t()
   def to_service(%__MODULE__{} = sys_msg, service_name),
     do: %__MODULE__{sys_msg | service_name: service_name}
 
@@ -126,9 +131,10 @@ defmodule X3m.System.Message do
 
   ## Examples
 
+      iex> sys_msg = X3m.System.Message.new(:create_user)
       iex> sys_msg.assigns[:user_id]
       nil
-      iex> sys_msg = assign(sys_msg, :user_id, 123)
+      iex> sys_msg = X3m.System.Message.assign(sys_msg, :user_id, 123)
       iex> sys_msg.assigns[:user_id]
       123
   """
@@ -174,6 +180,15 @@ defmodule X3m.System.Message do
     return(message, response)
   end
 
+  @doc """
+  Stores a validated `request` (e.g. an `Ecto.Changeset` or a command struct) on the
+  `message`.
+
+  If `request` carries `valid?: false`, the message is halted with a
+  `Response.validation_error/1` so dispatch returns the error immediately. Otherwise
+  the request is stored and `message.valid?` is set to `true`.
+  """
+  @spec put_request(request :: map(), t()) :: t()
   def put_request(%{valid?: false} = request, %__MODULE__{} = message) do
     %{message | valid?: false, request: request}
     |> return(Response.validation_error(request))
@@ -185,6 +200,7 @@ defmodule X3m.System.Message do
   @doc """
   Puts `value` under `key` in `message.raw_request` map.
   """
+  @spec put_in_raw_request(t(), key :: term(), value :: term()) :: t()
   def put_in_raw_request(%__MODULE__{} = message, key, value) do
     raw_request =
       (message.raw_request || %{})
@@ -207,6 +223,20 @@ defmodule X3m.System.Message do
   def add_event(%__MODULE__{events: events} = message, event),
     do: %{message | events: [event | events]}
 
+  @doc """
+  Extracts the aggregate id from `message.raw_request` under `id_field` and copies it
+  into `message.aggregate_meta.id`.
+
+  Options:
+
+    * `:generate_if_missing` - when `true` and the id is absent, a fresh UUID is
+      generated and written into both `raw_request` and `aggregate_meta`.
+
+  When the id is missing and `:generate_if_missing` is `false` (the default), the
+  message is halted with a `Response.missing_id/1` response. This is what the
+  `X3m.System.MessageHandler` `on_new_aggregate` / `on_aggregate` macros call for you.
+  """
+  @spec prepare_aggregate_id(t(), id_field :: term(), opts :: Keyword.t()) :: t()
   def prepare_aggregate_id(%__MODULE__{} = message, id_field, opts \\ []) do
     id =
       message
@@ -233,6 +263,11 @@ defmodule X3m.System.Message do
     end
   end
 
+  @doc """
+  Generates a new, URL-safe, unique message id.
+
+  This is the same id format used by `new/2` when no `:id` is given.
+  """
   # taken from https://github.com/elixir-plug/plug/blob/master/lib/plug/request_id.ex
   @spec gen_msg_id :: String.t()
   def gen_msg_id() do

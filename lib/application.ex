@@ -1,5 +1,8 @@
 defmodule X3m.System.Application do
-  @moduledoc false
+  @moduledoc !"""
+             Internal. OTP application that starts the task supervisor, node monitor and
+             service registry, and wires up node telemetry handlers.
+             """
 
   use Application
 
