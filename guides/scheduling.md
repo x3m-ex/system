@@ -64,6 +64,19 @@ The scheduler assigns the resolved `:dispatch_at` onto the message, calls your
 `save_alarm/3` so it is persisted, and arms delivery. When the time arrives the message
 is sent through `X3m.System.Dispatcher.dispatch/2` to its `service_name`.
 
+```mermaid
+flowchart TD
+  S["Scheduler.dispatch(msg, id, at:/in:)"] --> SA["save_alarm/3 (persist)"]
+  SA --> WIN{"due within the in-memory window?"}
+  WIN -->|"yes: loaded by load_alarms/3"| ARM["armed in memory"]
+  WIN -->|"far future"| LATER["stays persisted; loaded later / after restart"]
+  LATER -.->|"window reached"| ARM
+  ARM -->|"time arrives"| DISP["Dispatcher.dispatch/2"]
+  DISP --> SR["service_responded/2"]
+  SR -->|":ok"| DONE["delete alarm"]
+  SR -->|"{:retry, in_ms, msg}"| ARM
+```
+
 ## Persistence and the in-memory window
 
 Not every future alarm is kept in memory. The scheduler loads alarms in bulk every

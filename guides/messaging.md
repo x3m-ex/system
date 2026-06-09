@@ -111,6 +111,24 @@ and waits for the reply:
 |> X3m.System.Dispatcher.dispatch(timeout: 10_000)
 ```
 
+```mermaid
+sequenceDiagram
+  participant Caller
+  participant Dispatcher
+  participant Registry as Service registry
+  participant Handler as Service handler
+  Caller->>Dispatcher: dispatch(message)
+  Dispatcher->>Registry: which node offers service_name?
+  alt no provider
+    Registry-->>Dispatcher: none
+    Dispatcher-->>Caller: response {:service_unavailable, name}
+  else provider found
+    Registry-->>Dispatcher: node
+    Dispatcher->>Handler: authorize/1, then invoke
+    Handler-->>Caller: %Message{response: ...}
+  end
+```
+
 - The default timeout is 5000 ms; on expiry the response becomes
   `{:service_timeout, service_name, message_id, timeout}`.
 - If no node offers the service, the response is

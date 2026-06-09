@@ -68,6 +68,20 @@ When `choose_node/1` returns a remote node, the router forwards the call there; 
 node runs the handler and replies **directly** to the original caller — the response
 does not hop back through the node that received the request.
 
+```mermaid
+sequenceDiagram
+  participant Caller
+  participant R1 as Router (receiving node)
+  participant R2 as Router (owner node)
+  participant H as Service handler
+  Caller->>R1: dispatch(message)
+  R1->>R1: choose_node/1 -> owner node
+  R1->>R2: _invoke via rpc (forward)
+  R2->>H: invoke service function
+  H-->>R2: {:reply, message}
+  R2-->>Caller: send to message.reply_to (directly, not via R1)
+```
+
 ## Asking for another node
 
 Sometimes a node accepts a call but then realises it can't serve it (for example, a

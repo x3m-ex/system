@@ -65,6 +65,16 @@ message to the service by name:
 #=> %X3m.System.Message{response: {:ok, "Hello, Ada!"}, ...}
 ```
 
+```mermaid
+flowchart LR
+  C[Caller] -->|"Message.new(:greet)"| D[Dispatcher.dispatch]
+  D -->|find a node offering :greet| R[Router]
+  R -->|"authorize/1"| A{authorized?}
+  A -->|no| F["response: {:error, :forbidden}"]
+  A -->|yes| H["Greeter.greet/1"]
+  H -->|"{:reply, Message.ok(...)}"| C
+```
+
 No aggregates or event store are involved here — any module registered through a
 router can be a dispatch target.
 

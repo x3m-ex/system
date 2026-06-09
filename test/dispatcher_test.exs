@@ -284,6 +284,25 @@ defmodule X3m.System.DispatcherTest do
     end
   end
 
+  describe "authorize/1 by assigns" do
+    test "authorizes and dispatches when assigns carry the admin marker" do
+      msg =
+        :admin_only
+        |> Message.new()
+        |> Message.assign(:invoked_by, %{admin?: true})
+
+      assert Dispatcher.authorized?(msg) == true
+      assert %Message{response: {:ok, :from_first}} = Dispatcher.dispatch(msg)
+    end
+
+    test "denies by default when the admin marker is absent" do
+      msg = Message.new(:admin_only)
+
+      assert Dispatcher.authorized?(msg) == false
+      assert %Message{response: {:error, :forbidden}} = Dispatcher.dispatch(msg)
+    end
+  end
+
   defp _new_message(service_name) do
     Message.new(service_name, raw_request: %{test_pid: self()})
   end

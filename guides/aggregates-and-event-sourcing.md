@@ -19,6 +19,39 @@ dispatcher.
 | `X3m.System.Aggregate.Repo` | reads and writes the event stream (you implement it) |
 | `X3m.System.Router` | routes a service call to the message handler |
 
+How they collaborate when a command is dispatched — either the aggregate is already in
+memory, or it must be rehydrated from its event stream first — then the new events are
+persisted:
+
+```mermaid
+sequenceDiagram
+  participant D as Dispatcher
+  participant R as Router
+  participant MH as MessageHandler
+  participant Repo as Aggregate.Repo
+  participant Agg as Aggregate
+  D->>R: command message
+  R->>R: authorize/1
+  R->>MH: command message
+  alt aggregate already in memory (pid registered)
+    MH->>Agg: handle_msg(message, current state)
+  else not running (when_pid_is_not_registered/3)
+    MH->>Repo: load event stream
+    Repo-->>MH: past events
+    MH->>Agg: apply_event/2 per event (rebuild state)
+    MH->>Agg: handle_msg(message, rebuilt state)
+  end
+  Agg-->>MH: {:block, message + events, state}
+  Note over Agg: blocked — no further commands until commit + apply
+  MH->>Repo: save_events
+  MH->>Agg: apply_event/2 for new events (new state), then unblock
+  MH-->>D: response, e.g. {:created, id, version}
+```
+
+With `:block`, the aggregate process holds further commands until the message handler has
+committed and applied these events — so commands are serialized per aggregate and never run
+against not-yet-persisted state. (`:noblock` returns immediately; nothing is persisted.)
+
 ## 1. The aggregate
 
 `use X3m.System.Aggregate` and declare the starting state, one command handler per
