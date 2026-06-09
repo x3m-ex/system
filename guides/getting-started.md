@@ -16,10 +16,9 @@ def deps do
 end
 ```
 
-Two dependencies are optional and pulled in only for specific building blocks:
+One dependency is optional:
 
 - `:elixir_uuid` — id generation when working with [aggregates](aggregates-and-event-sourcing.md).
-- `:tzdata` — required by the [scheduler](scheduling.md).
 
 `X3m.System` starts its own OTP application (a task supervisor, a node monitor and the
 service registry), so once it is a dependency there is nothing to add to your

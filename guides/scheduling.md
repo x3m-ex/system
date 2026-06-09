@@ -6,7 +6,7 @@ because you persist them, and they are dispatched through the normal
 `X3m.System.Dispatcher` when their time comes.
 
 The scheduler is backend-agnostic and standalone — it doesn't require aggregates or any
-particular store. It needs the optional `:tzdata` dependency.
+particular store.
 
 ## Defining a scheduler
 

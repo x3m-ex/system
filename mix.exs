@@ -94,8 +94,6 @@ defmodule X3m.System.MixProject do
       {:telemetry, "~> 0.4 or ~> 1.0"},
       # needed when working with aggregates
       {:elixir_uuid, "~> 1.2", optional: true},
-      # needed for use of X3m.System.Scheduller
-      {:tzdata, "~> 1.0", optional: true},
 
       # test dependencies
       {:local_cluster, "~> 2.0", only: [:test], runtime: false},

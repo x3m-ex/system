@@ -26,10 +26,9 @@ def deps do
 end
 ```
 
-Two dependencies are optional and only needed for some building blocks:
+One dependency is optional:
 
 - `:elixir_uuid` — needed when working with aggregates (id generation).
-- `:tzdata` — needed for `X3m.System.Scheduler`.
 
 ## A minimal example
 
