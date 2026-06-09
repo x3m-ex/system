@@ -53,10 +53,14 @@ defmodule X3m.System.Aggregate do
   """
 
   defmodule State do
-    @moduledoc !"""
-               Internal. Wraps an aggregate's client state with its version and the set of
-               already-processed message ids.
-               """
+    @moduledoc """
+    The wrapper state of an aggregate: your aggregate's own state (`client_state`) plus
+    its event-stream `version` and the set of already-processed message ids.
+
+    You meet it mostly in tests — `X3m.System.Aggregate.initial_state/1` returns it and
+    `apply_events/3` produces it — where you read `client_state` to assert on your
+    aggregate's state.
+    """
     @type t :: %__MODULE__{version: integer, client_state: any}
     defstruct version: -1, client_state: nil, processed_messages: MapSet.new()
   end
@@ -66,9 +70,13 @@ defmodule X3m.System.Aggregate do
   """
   @callback initial_state :: map()
 
-  # Wraps `aggregate_mod`'s `initial_state/0` in the internal `State` struct. Used by
-  # the aggregate process when it spawns; not part of the public API.
-  @doc false
+  @doc """
+  Builds the initial wrapped `State` for `aggregate_mod`, seeding `client_state` from its
+  `c:initial_state/0`.
+
+  Used by the aggregate process when it spawns, and handy in tests as the starting state
+  you pass to a command function.
+  """
   @spec initial_state(aggregate_mod :: module()) :: State.t()
   def initial_state(aggregate_mod),
     do: %State{client_state: apply(aggregate_mod, :initial_state, [])}

@@ -52,6 +52,7 @@ defmodule X3m.System.MixProject do
         "Aggregates & Event Sourcing": [
           X3m.System.MessageHandler,
           X3m.System.Aggregate,
+          X3m.System.Aggregate.State,
           X3m.System.Aggregate.Repo
         ],
         Scheduling: [
