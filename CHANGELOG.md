@@ -1,3 +1,8 @@
+# 0.9.1
+
+- Add set_state optional callback to Aggregate
+- Add documentation.
+
 # 0.9.0
 
 - Breaking change in telemetry events from dispatcher and router

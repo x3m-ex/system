@@ -30,6 +30,27 @@ defmodule X3m.System.Test.Account.Aggregate do
     end
   end
 
+  handle_msg :ensure_account, &Commands.Open.new/2, fn
+    %SysMsg{request: cmd} = msg, %State{id: nil} = state ->
+      event = %Events.Opened{id: cmd.id, owner_id: cmd.owner_id}
+
+      msg =
+        msg
+        |> SysMsg.add_event(event)
+        |> SysMsg.created(cmd.id)
+
+      {:block, msg, state}
+
+    %SysMsg{request: %Commands.Open{owner_id: owner_id}} = msg,
+    %State{owner_id: owner_id} = state ->
+      # owner unchanged -> no-op (no event)
+      {:noblock, SysMsg.ok(msg), state}
+
+    %SysMsg{request: cmd} = msg, %State{} = state ->
+      event = %Events.OwnerChanged{id: cmd.id, owner_id: cmd.owner_id}
+      {:block, msg |> SysMsg.add_event(event) |> SysMsg.ok(), state}
+  end
+
   handle_msg :close_account, fn
     %SysMsg{assigns: %{invoked_by: %{admin?: true}}} = msg, %State{} = state ->
       _close(msg, state)
@@ -41,8 +62,13 @@ defmodule X3m.System.Test.Account.Aggregate do
       {:noblock, SysMsg.error(msg, :forbidden), state}
   end
 
+  def processed_message_id(%{message_id: id}), do: id
+
   def apply_event(%Events.Opened{} = e, %State{} = state),
     do: %State{state | id: e.id, owner_id: e.owner_id}
+
+  def apply_event(%Events.OwnerChanged{} = e, %State{} = state),
+    do: %State{state | owner_id: e.owner_id}
 
   def apply_event(%Events.Deposited{} = e, %State{} = state),
     do: %State{state | balance: state.balance + e.amount}

@@ -71,6 +71,18 @@ defmodule X3m.System.Aggregate do
   @callback initial_state :: map()
 
   @doc """
+  Rebuilds the aggregate's client state from `loaded_state` — the state-based
+  (non-event-sourced) analogue of `c:initial_state/0`: "for this loaded data, give me back
+  your state".
+
+  Called by `X3m.System.GenAggregate.set_state/2` when a message handler hydrates a process
+  from saved state instead of replaying events (see the `when_pid_is_not_registered/3` override
+  in `X3m.System.MessageHandler`). Defaults to the identity — `loaded_state` is taken as the
+  client state — so override it only when the persisted shape differs from your client state.
+  """
+  @callback set_state(loaded_state :: term()) :: client_state :: map()
+
+  @doc """
   Builds the initial wrapped `State` for `aggregate_mod`, seeding `client_state` from its
   `c:initial_state/0`.
 
@@ -189,6 +201,10 @@ defmodule X3m.System.Aggregate do
         do: %AggregateState{state | version: last_version}
 
       def processed_message_id(nil), do: nil
+
+      def set_state(loaded_state), do: loaded_state
+      defoverridable set_state: 1
+
       @before_compile X3m.System.Aggregate
     end
   end

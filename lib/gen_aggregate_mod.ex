@@ -8,4 +8,5 @@ defmodule X3m.System.GenAggregateMod do
               {:ok, X3m.System.Message.t(), any} | any
   @callback commit(pid, String.t(), X3m.System.Message.t(), integer) ::
               {:ok, X3m.System.Aggregate.State.t()} | :transaction_timeout
+  @callback set_state(pid, loaded_state :: term(), version :: integer()) :: :ok
 end

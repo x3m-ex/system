@@ -179,7 +179,9 @@ defmodule X3m.System.Test.AccountAggregateTest do
 
   describe "idempotency" do
     test "a message whose id was already processed returns :ok, no events, and warns" do
-      state = TestSupport.state_from_events(Account, [%Events.Opened{id: "a1", owner_id: "u1"}])
+      %Aggregate.State{} =
+        state = TestSupport.state_from_events(Account, [%Events.Opened{id: "a1", owner_id: "u1"}])
+
       msg = TestSupport.command_message(:deposit, %{"id" => "a1", "amount" => 50})
 
       processed = %Aggregate.State{
@@ -191,6 +193,24 @@ defmodule X3m.System.Test.AccountAggregateTest do
 
       assert {:noblock, %Message{response: :ok, events: []}, ^processed} = result
       assert log =~ "already processed"
+    end
+  end
+
+  describe "set_state/1 (non-ES hydration callback)" do
+    test "defaults to returning the loaded state as the client state" do
+      loaded = %State{id: "a9", owner_id: "u9", balance: 500}
+      assert loaded == Account.set_state(loaded)
+    end
+  end
+
+  describe "processed_message_id/1" do
+    test "reads the message id from event metadata" do
+      assert Account.processed_message_id(%{message_id: "m1"}) == "m1"
+    end
+
+    test "returns nil when metadata carries no message id" do
+      assert Account.processed_message_id(%{}) == nil
+      assert Account.processed_message_id(nil) == nil
     end
   end
 end

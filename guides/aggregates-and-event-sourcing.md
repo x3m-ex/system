@@ -328,6 +328,118 @@ A few things to note:
 - No message handler, repo, or running process is involved, so these are plain, fast,
   `async: true` unit tests.
 
+## Testing the full lifecycle
+
+The tests above cover your command logic. To exercise the *runtime* — loading and spawning
+the aggregate process, persisting events, idempotency, and your handler's **overrides**
+(`save_events/1`, `save_state/3`, `when_pid_is_not_registered/3`, `:unload_aggregate_on`) —
+you need a running aggregate and a repo. In tests, back it with an **in-memory
+`Aggregate.Repo`** instead of a real event store:
+
+```elixir
+defmodule MyApp.Accounts.InMemoryEventStore do
+  @moduledoc false
+  use X3m.System.Aggregate.Repo
+  use Agent
+
+  alias X3m.System.Message
+
+  def start_link(_opts \\ []),
+    do: Agent.start_link(fn -> %{} end, name: __MODULE__)
+
+  def reset(),
+    do: Agent.update(__MODULE__, fn _state -> %{} end)
+
+  @impl true
+  def has?(stream_name),
+    do: Agent.get(__MODULE__, &Map.has_key?(&1, stream_name))
+
+  @impl true
+  def stream_events(stream_name, _start_at \\ 0, _per_page \\ 1_000),
+    do: Agent.get(__MODULE__, &Map.get(&1, stream_name, []))
+
+  @impl true
+  def delete_stream(stream_name, _hard_delete?, _expected_version) do
+    Agent.update(__MODULE__, &Map.delete(&1, stream_name))
+    :ok
+  end
+
+  @impl true
+  def save_events(stream_name, %Message{} = message, metadata) do
+    __MODULE__
+    |> Agent.get_and_update(fn streams ->
+      existing = Map.get(streams, stream_name, [])
+      current = length(existing) - 1
+
+      # optimistic concurrency: the expected version is the aggregate's loaded version
+      # (-1 for a new aggregate), so a "create" against an existing stream is rejected.
+      if message.aggregate_meta.version != current do
+        {{:error, :wrong_expected_version, current}, streams}
+      else
+        # stamp message.id into metadata so idempotency survives a rehydrate
+        meta = Map.put(metadata, :message_id, message.id)
+
+        appended =
+          message.events
+          |> Enum.with_index(current + 1)
+          |> Enum.map(fn {event, number} -> {event, number, meta} end)
+
+        last = current + length(message.events)
+        {{:ok, last}, Map.put(streams, stream_name, existing ++ appended)}
+      end
+    end)
+  end
+end
+```
+
+Start it alongside the aggregate's supervision tree in `test/test_helper.exs`:
+
+```elixir
+{:ok, _} = MyApp.Accounts.InMemoryEventStore.start_link()
+
+{:ok, _} =
+  X3m.System.LocalAggregatesSupervision.start_link([MyApp.LocalAggregates, MyApp])
+```
+
+Point a test message handler at the in-memory store, then drive it by calling the generated
+functions directly and asserting on both the reply and the stored events:
+
+```elixir
+defmodule MyApp.Accounts.MessageHandlerTest do
+  # the pid facade and registry are named per aggregate module
+  use ExUnit.Case, async: false
+
+  import X3m.System.Aggregate.TestSupport
+  alias MyApp.Accounts.{MessageHandler, InMemoryEventStore, Events}
+
+  setup do
+    InMemoryEventStore.reset()
+    :ok
+  end
+
+  test "opens an account and persists the event" do
+    id = UUID.uuid4()
+    msg = command_message(:open_account, %{"id" => id, "owner" => "Ada"})
+
+    assert {:reply, replied} = MessageHandler.open_account(msg)
+    assert {:created, ^id, 0} == replied.response
+    assert [{%Events.Opened{}, 0, _}] = InMemoryEventStore.stream_events("accounts-" <> id)
+  end
+end
+```
+
+Notes:
+
+- Use a fresh aggregate id per test; reuse an id only when you are deliberately testing
+  rehydration or idempotency (unload the process — `AggregatePidFacade.exit_process/3` — to
+  force the next command to reload).
+- `save_events/3` stamps `message.id` into each event's metadata so idempotency survives a
+  rehydrate (the aggregate re-reads it via `processed_message_id/1` while replaying).
+- This is how you test *your* overrides — `save_events/1` reacting to or filtering events,
+  `:unload_aggregate_on` rules, the save/load callbacks below — rather than the library
+  internals. For a non-event-sourced handler, point `save_state/3` and
+  `when_pid_is_not_registered/3` at a plain in-memory store the same way.
+
 ## Validating without persisting (`dry_run`)
 
 `X3m.System.Dispatcher.validate/1` dispatches the command with `dry_run: true`: the
@@ -354,9 +466,14 @@ Together they support a spectrum:
 - **Snapshots on top of events:** `save_state/3` stores a periodic snapshot;
   `when_pid_is_not_registered/3` loads the latest snapshot and replays only the events
   after it.
-- **Non-event-sourced (state-based) aggregates:** `save_state/3` persists the full
-  current state and `when_pid_is_not_registered/3` loads it directly — no event replay
-  at all.
+- **Non-event-sourced (state-based) aggregates:** `save_state/3` persists the full current
+  state (it receives the wrapped `%X3m.System.Aggregate.State{}`, so you can store its
+  `client_state` and `version`); `when_pid_is_not_registered/3` loads that row, spawns the
+  process and seeds it with `X3m.System.GenAggregate.set_state(pid, loaded_state, version)` —
+  no event replay at all. `set_state/3` rebuilds the process's `client_state` through your
+  aggregate's `set_state/1` callback (the state-based analogue of `initial_state/0` — "for
+  this loaded data, give me back your state"; defaults to the identity) and restores the
+  version.
 
 Your command logic (`handle_msg`) is identical in all three cases; only how state is
 saved and restored differs.

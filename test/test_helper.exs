@@ -5,4 +5,13 @@
 
 ExUnit.start()
 
+{:ok, _} = X3m.System.Test.Account.EventStore.start_link()
+{:ok, _} = X3m.System.Test.Account.StateStore.start_link()
+
+{:ok, _} =
+  X3m.System.LocalAggregatesSupervision.start_link([
+    X3m.System.Test.Account.LocalAggregates,
+    X3m.System.Test
+  ])
+
 :ok = X3m.System.Test.Router.register_services()
