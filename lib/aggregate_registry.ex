@@ -66,12 +66,19 @@ defmodule X3m.System.AggregateRegistry do
   defp ref_table(name), do: Module.concat(name, Refs)
 
   def handle_call({:has_key?, key}, _from, state) do
-    {:reply, Map.has_key?(state.processes, key), state}
+    result =
+      state.pid_table
+      |> _get(key)
+      |> case do
+        {:ok, _pid} -> true
+        :error -> false
+      end
+
+    {:reply, result, state}
   end
 
-  def handle_call({:get, key}, _from, state) do
-    {:reply, Map.fetch(state.processes, key), state}
-  end
+  def handle_call({:get, key}, _from, state),
+    do: {:reply, _get(state.pid_table, key), state}
 
   def handle_call({:register, key, pid}, _from, state) do
     result =
