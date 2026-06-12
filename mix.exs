@@ -1,22 +1,69 @@
 defmodule X3m.System.MixProject do
   use Mix.Project
 
+  @version "0.9.1"
+  @source_url "https://github.com/x3m-ex/system"
+
   def project do
     [
       app: :x3m_system,
-      version: "0.9.0",
-      elixir: "~> 1.11",
-      source_url: "https://github.com/x3m-ex/system",
+      version: @version,
+      elixir: "~> 1.17",
+      source_url: @source_url,
+      homepage_url: @source_url,
       description: """
-      Building blocks for distributed systems
+      Building blocks for distributed and/or CQRS/ES systems
       """,
       package: _package(),
       start_permanent: true,
       test_coverage: [tool: ExCoveralls],
       name: "X3m System",
+      docs: _docs(),
       aliases: _aliases(),
       deps: _deps(),
+      dialyzer: [plt_add_apps: [:ex_unit, :local_cluster, :ecto]],
       elixirc_paths: _elixirc_paths(Mix.env())
+    ]
+  end
+
+  defp _docs do
+    [
+      main: "readme",
+      source_ref: "v#{@version}",
+      extras: [
+        "README.md",
+        "guides/getting-started.md",
+        "guides/messaging.md",
+        "guides/aggregates-and-event-sourcing.md",
+        "guides/distribution.md",
+        "guides/scheduling.md",
+        "CHANGELOG.md"
+      ],
+      groups_for_extras: [
+        Guides: ~r"guides/"
+      ],
+      groups_for_modules: [
+        Messaging: [
+          X3m.System.Message,
+          X3m.System.Dispatcher,
+          X3m.System.Router,
+          X3m.System.Response
+        ],
+        "Aggregates & Event Sourcing": [
+          X3m.System.MessageHandler,
+          X3m.System.Aggregate,
+          X3m.System.Aggregate.State,
+          X3m.System.Aggregate.Repo,
+          X3m.System.Aggregate.TestSupport
+        ],
+        Scheduling: [
+          X3m.System.Scheduler
+        ],
+        Setup: [
+          X3m.System.LocalAggregates,
+          X3m.System.LocalAggregatesSupervision
+        ]
+      ]
     ]
   end
 
@@ -34,7 +81,8 @@ defmodule X3m.System.MixProject do
         "coveralls.detail": :test,
         "coveralls.post": :test,
         "coveralls.html": :test,
-        dialyzer: :dev,
+        docs: :dev,
+        dialyzer: :test,
         bless: :test
       ]
     ]
@@ -48,10 +96,10 @@ defmodule X3m.System.MixProject do
       {:telemetry, "~> 0.4 or ~> 1.0"},
       # needed when working with aggregates
       {:elixir_uuid, "~> 1.2", optional: true},
-      # needed for use of X3m.System.Scheduller
-      {:tzdata, "~> 1.0", optional: true},
+      {:ecto, "~> 3.0", only: :test},
 
       # test dependencies
+      {:local_cluster, "~> 2.0", only: [:test], runtime: false},
       {:dialyxir, "~> 1.1", only: [:test, :dev], runtime: false},
       {:ex_doc, "~> 0.21", only: [:dev, :test], runtime: false},
       {:excoveralls, "~> 0.13", only: :test}
@@ -67,7 +115,7 @@ defmodule X3m.System.MixProject do
   defp _bless(_) do
     [
       {"format", ["--check-formatted"]},
-      # {"compile", ["--warnings-as-errors", "--force"]},
+      {"compile", ["--warnings-as-errors", "--force"]},
       {"coveralls.html", []},
       {"dialyzer", []},
       {"docs", []}
@@ -82,10 +130,18 @@ defmodule X3m.System.MixProject do
 
   defp _package do
     [
-      files: [".formatter.exs", "lib", "mix.exs", "README*", "LICENSE*"],
+      files: [
+        ".formatter.exs",
+        "lib",
+        "guides",
+        "mix.exs",
+        "README*",
+        "CHANGELOG*",
+        "LICENSE*"
+      ],
       maintainers: ["Milan Burmaja"],
       licenses: ["MIT"],
-      links: %{"GitHub" => "https://github.com/x3m-ex/system"}
+      links: %{"GitHub" => @source_url}
     ]
   end
 end

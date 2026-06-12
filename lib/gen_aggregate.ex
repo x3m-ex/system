@@ -1,10 +1,16 @@
 defmodule X3m.System.GenAggregate do
+  @moduledoc !"""
+             Internal. GenServer hosting a single aggregate instance: applies event
+             streams, runs commands against the aggregate module and manages the
+             block/commit transaction protocol.
+             """
   use GenServer, restart: :transient
 
   alias X3m.System.Message
   @behaviour X3m.System.GenAggregateMod
 
   defmodule State do
+    @moduledoc !"Internal. State of a `X3m.System.GenAggregate` process."
     @enforce_keys ~w(aggregate_mod aggregate_state commit_timeout)a
     defstruct @enforce_keys
   end
@@ -38,6 +44,11 @@ defmodule X3m.System.GenAggregate do
     end
   end
 
+  @impl X3m.System.GenAggregateMod
+  @spec set_state(pid, loaded_state :: term(), version :: integer()) :: :ok
+  def set_state(pid, loaded_state, version),
+    do: GenServer.call(pid, {:set_state, loaded_state, version})
+
   # Server side
 
   @impl GenServer
@@ -59,6 +70,12 @@ defmodule X3m.System.GenAggregate do
         apply(state.aggregate_mod, :apply_events, [[event], event_number, event_metadata, acc])
       end)
 
+    {:reply, :ok, %State{state | aggregate_state: aggregate_state}}
+  end
+
+  def handle_call({:set_state, loaded_state, version}, _from, %State{} = state) do
+    client_state = apply(state.aggregate_mod, :set_state, [loaded_state])
+    aggregate_state = %{state.aggregate_state | client_state: client_state, version: version}
     {:reply, :ok, %State{state | aggregate_state: aggregate_state}}
   end
 

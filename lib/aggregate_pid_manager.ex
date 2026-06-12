@@ -1,4 +1,8 @@
 defmodule X3m.System.AggregatePidManager do
+  @moduledoc !"""
+             Internal. Supervises one aggregate module's registry and dynamic supervisor
+             together (`:one_for_all`) so they restart as a unit.
+             """
   use Supervisor
   alias X3m.System.AggregateRegistry, as: Registry
   alias X3m.System.AggregateSup

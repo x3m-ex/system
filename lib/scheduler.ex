@@ -72,6 +72,7 @@ defmodule X3m.System.Scheduler do
   @optional_callbacks in_memory_interval: 0, dispatch_timeout: 1
 
   defmodule State do
+    @moduledoc !"Internal. State of a `X3m.System.Scheduler` GenServer."
     @type t() :: %__MODULE__{
             client_state: any(),
             loaded_until: nil | DateTime.t(),
@@ -129,7 +130,9 @@ defmodule X3m.System.Scheduler do
       """
       @spec dispatch(Message.t(), String.t(), opts :: Keyword.t()) :: :ok
       def dispatch(%Message{} = msg, aggregate_id, in: dispatch_in_ms) do
-        dispatch_at = DateTime.add(_now(), dispatch_in_ms, :millisecond)
+        dispatch_at =
+          DateTime.utc_now()
+          |> DateTime.add(dispatch_in_ms, :millisecond)
 
         GenServer.call(
           @name,
@@ -138,18 +141,14 @@ defmodule X3m.System.Scheduler do
       end
 
       def dispatch(%Message{} = msg, aggregate_id, at: %DateTime{} = dispatch_at) do
-        dispatch_in_ms = DateTime.diff(dispatch_at, _now(), :millisecond)
+        dispatch_in_ms =
+          dispatch_at
+          |> DateTime.diff(DateTime.utc_now(), :millisecond)
 
         GenServer.call(
           @name,
           {:schedule_dispatch, msg, aggregate_id, dispatch_at, dispatch_in_ms}
         )
-      end
-
-      @spec _now() :: DateTime.t()
-      defp _now() do
-        {:ok, time} = DateTime.now("Etc/UTC", Tzdata.TimeZoneDatabase)
-        time
       end
 
       @impl GenServer
@@ -173,8 +172,8 @@ defmodule X3m.System.Scheduler do
           |> Message.assign(:dispatch_attempts, 0)
 
         msg =
-          msg
-          |> save_alarm(aggregate_id, state.client_state)
+          __MODULE__
+          |> apply(:save_alarm, [msg, aggregate_id, state.client_state])
           |> case do
             :ok -> msg
             {:ok, %Message{} = new_message} -> new_message
@@ -210,7 +209,9 @@ defmodule X3m.System.Scheduler do
         scheduled_alarms =
           alarms
           |> Enum.reduce(%{}, fn %Message{} = msg, acc ->
-            dispatch_in_ms = DateTime.diff(msg.assigns.dispatch_at, _now(), :millisecond)
+            dispatch_in_ms =
+              msg.assigns.dispatch_at
+              |> DateTime.diff(DateTime.utc_now(), :millisecond)
 
             cond do
               dispatch_in_ms < 0 ->

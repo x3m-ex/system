@@ -1,4 +1,9 @@
 defmodule X3m.System.ServiceRegistry do
+  @moduledoc !"""
+             Internal. Cluster-wide registry of which node offers which service; exchanges
+             local/remote service maps between nodes and answers discovery queries from
+             `X3m.System.Dispatcher`.
+             """
   use GenServer
   require Logger
   alias X3m.System.ServiceRegistry.Implementation, as: Impl
@@ -7,6 +12,13 @@ defmodule X3m.System.ServiceRegistry do
   def start_link(opts \\ []),
     do: GenServer.start_link(__MODULE__, :ok, [{:name, __MODULE__} | opts])
 
+  @doc """
+    {:remote,
+   %{
+     engine_1@localhost: Engine.X3m.Router,
+     engine_2@localhost: Engine.X3m.Router
+   }}
+  """
   def find_nodes_with_service(service),
     do: GenServer.call(__MODULE__, {:find_nodes_with_service, service})
 

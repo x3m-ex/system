@@ -1,5 +1,8 @@
 defmodule X3m.System.ServiceRegistry.Implementation do
-  @moduledoc false
+  @moduledoc !"""
+             Internal. Pure state transitions for `X3m.System.ServiceRegistry`:
+             registering and removing remote services per node.
+             """
   alias X3m.System.ServiceRegistry.State
 
   @spec register_remote_services({node, [{atom, atom}]}, State.t()) :: {:ok, State.t()}

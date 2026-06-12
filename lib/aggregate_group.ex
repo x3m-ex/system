@@ -1,4 +1,8 @@
 defmodule X3m.System.AggregateGroup do
+  @moduledoc !"""
+             Internal. Per-aggregate-type supervisor that groups one aggregate module's
+             pid manager and pid facade under a single supervision subtree.
+             """
   use Supervisor
   alias X3m.System.{AggregatePidFacade, AggregatePidManager}
 

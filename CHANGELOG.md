@@ -1,3 +1,8 @@
+# 0.9.1
+
+- Add set_state optional callback to Aggregate
+- Add documentation.
+
 # 0.9.0
 
 - Breaking change in telemetry events from dispatcher and router
@@ -79,8 +84,8 @@ use X3m.System.MessageHandler,
 
 # 0.7.16
 
-- `execute_on_new_aggregate returns `{:ok, -1}`if aggregate returns`:ok`response
-with empty`events`
+- `execute_on_new_aggregate` returns `{:ok, -1}` if aggregate returns `:ok` response
+  with empty `events`
 
 # 0.7.15
 

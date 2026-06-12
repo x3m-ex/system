@@ -54,4 +54,6 @@ jobs:
           mix deps.get
 
       - name: Full bless
-        run: mix bless
+        run: |
+          epmd -daemon
+          mix bless

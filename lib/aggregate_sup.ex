@@ -1,4 +1,8 @@
 defmodule X3m.System.AggregateSup do
+  @moduledoc !"""
+             Internal. Dynamic supervisor that starts and terminates individual
+             `X3m.System.GenAggregate` processes for one aggregate module.
+             """
   use DynamicSupervisor
 
   def name(aggregate_mod),

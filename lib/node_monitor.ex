@@ -1,4 +1,8 @@
 defmodule X3m.System.NodeMonitor do
+  @moduledoc !"""
+             Internal. Watches cluster membership and emits `:node_joined` / `:node_left`
+             telemetry events used to keep the service registry in sync.
+             """
   def child_spec(_opts) do
     %{
       id: __MODULE__,

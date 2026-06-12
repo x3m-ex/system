@@ -1,4 +1,8 @@
 defmodule X3m.System.AggregatePidFacade do
+  @moduledoc !"""
+             Internal. Default `pid_facade_mod` for message handlers: spawns, locates and
+             tears down per-id aggregate processes via the aggregate registry and supervisor.
+             """
   use GenServer
   require Logger
   alias X3m.System.AggregateSup

@@ -1,4 +1,57 @@
 defmodule X3m.System.MessageHandler do
+  @moduledoc """
+  Connects a router service to an aggregate, taking care of loading the aggregate,
+  running the command, persisting the produced events and replying to the caller.
+
+  A message handler is the glue between `X3m.System.Router` (which routes a service
+  call) and `X3m.System.Aggregate` (which decides what happens). You `use` it with the
+  collaborators it needs, then declare one function per service with the `on_*_aggregate`
+  macros:
+
+      defmodule MyApp.Accounts.MessageHandler do
+        use X3m.System.MessageHandler,
+          aggregate_mod: MyApp.Accounts.Aggregate,
+          aggregate_repo: MyApp.Accounts.AggregateRepo,
+          stream: "accounts",
+          pid_facade_mod: X3m.System.AggregatePidFacade,
+          event_metadata: %{app_version: "1.0.0"}
+
+        on_new_aggregate :open_account, id: :id
+        on_aggregate :deposit, id: :account_id
+        on_maybe_new_aggregate :ensure_account, id: :id
+      end
+
+  ## `use` options
+
+    * `:aggregate_mod` (required) - the `X3m.System.Aggregate` module that handles the
+      command and applies events.
+    * `:aggregate_repo` (required) - a module implementing `X3m.System.Aggregate.Repo`,
+      used to read and persist the event stream.
+    * `:pid_facade_mod` (required) - the process facade that spawns/locates the
+      aggregate process. Use the default shown above unless you provide your own
+      (e.g. to use a distributed registry such as Horde).
+    * `:stream` - prefix for the per-aggregate stream name (`"\#{stream}-\#{id}"`).
+    * `:event_metadata` - a map merged into the metadata stored with every event.
+    * `:unload_aggregate_on` - rules for tearing the aggregate process down after
+      certain events or states, to free memory.
+
+  ## Lifecycle
+
+  Each declared function:
+
+  1. extracts the aggregate id from `message.raw_request` (see
+     `X3m.System.Message.prepare_aggregate_id/3`),
+  2. loads or spawns the aggregate process and runs the command on it,
+  3. on a `{:block, ...}` result, persists the events via the repo and commits,
+  4. enriches the response with the new aggregate version
+     (`{:ok, version}` / `{:created, id, version}`) and replies to `message.reply_to`.
+
+  Snapshotting and other persistence strategies are supported by overriding the
+  generated `save_state/3` and `when_pid_is_not_registered/3` callbacks.
+
+  See the "Aggregates & Event Sourcing" guide for a full walk-through.
+  """
+
   defmacro on_new_aggregate(cmd, opts \\ []) do
     id_field = Keyword.get(opts, :id, "id")
     commit_timeout = Keyword.get(opts, :commit_timeout, 5_000)
@@ -126,7 +179,8 @@ defmodule X3m.System.MessageHandler do
         with {:ok, pid} <- @pid_facade_mod.spawn_new(@pid_facade_name, id),
              {:block, %X3m.System.Message{} = message, transaction_id} <-
                @gen_aggregate_mod.handle_msg(pid, cmd, message, opts),
-             {:ok, message, version} <- _apply_changes(pid, transaction_id, message) do
+             {:ok, %X3m.System.Message{} = message, version} <-
+               _apply_changes(pid, transaction_id, message) do
           case message.response do
             {:created, ^id} -> %X3m.System.Message{message | response: {:created, id, version}}
             other -> message
@@ -160,7 +214,8 @@ defmodule X3m.System.MessageHandler do
                @pid_facade_mod.get_pid(@pid_facade_name, id, &when_pid_is_not_registered/3),
              {:block, %X3m.System.Message{} = message, transaction_id} <-
                @gen_aggregate_mod.handle_msg(pid, cmd, message, opts),
-             {:ok, message, version} <- _apply_changes(pid, transaction_id, message) do
+             {:ok, %X3m.System.Message{} = message, version} <-
+               _apply_changes(pid, transaction_id, message) do
           case message.response do
             :ok -> %X3m.System.Message{message | response: {:ok, version}}
             {:ok, any} -> %X3m.System.Message{message | response: {:ok, any, version}}
@@ -256,49 +311,13 @@ defmodule X3m.System.MessageHandler do
         end
       end
 
-      @spec _schedule_process_teardown(pid(), X3m.System.Message.t(), any()) ::
-              :skip | :unload | {:in, pos_integer()}
-      defp _schedule_process_teardown(pid, %X3m.System.Message{} = message, state) do
-        @unload_aggregate_on
-        |> Map.get(:events, %{})
-        |> Enum.each(fn {event, time} ->
-          _schedule_process_tear_down_on_events(message.events, event, time, pid)
-        end)
-
-        _schedule_process_teardown_on_state(Map.get(@unload_aggregate_on, :state), state)
-      end
-
-      defp _schedule_process_teardown_on_state(fun, state) when is_function(fun) do
-        try do
-          fun.(state)
-        rescue
-          FunctionClauseError ->
-            :skip
-        end
-      end
-
-      defp _schedule_process_teardown_on_state(_, _),
-        do: :skip
-
-      defp _schedule_process_tear_down_on_events([], _, _, _),
-        do: :ok
-
-      defp _schedule_process_tear_down_on_events([%{__struct__: event} | rest], event, time, pid) do
-        _create_tear_down_scheduler(pid, time, event)
-        _schedule_process_tear_down_on_events(rest, event, time, pid)
-      end
-
-      defp _schedule_process_tear_down_on_events([_ | rest], event, time, pid) do
-        _schedule_process_tear_down_on_events(rest, event, time, pid)
-      end
-
-      defp _create_tear_down_scheduler(pid, {:in, milliseconds}, event) do
-        reason = "Scheduled tear down of aggregate on #{inspect(event)}"
-        Process.send_after(@pid_facade_name, {:exit_process, pid, reason}, milliseconds)
-      end
-
       defp _apply_changes(pid, transaction_id, %X3m.System.Message{dry_run: false} = message) do
-        case save_events(message) do
+        # `save_events/1` is overridable; dispatch via apply/3 so a consumer impl that can never
+        # error (e.g. a non-event-sourced handler) does not make the `error ->` clause below a
+        # "clause cannot match" warning under --warnings-as-errors.
+        __MODULE__
+        |> apply(:save_events, [message])
+        |> case do
           {:ok, last_event_number} ->
             {:ok, new_state} =
               @gen_aggregate_mod.commit(pid, transaction_id, message, last_event_number)
@@ -309,7 +328,14 @@ defmodule X3m.System.MessageHandler do
 
             save_state(message.aggregate_meta.id, new_state, message)
 
-            case _schedule_process_teardown(pid, message, new_state.client_state) do
+            @unload_aggregate_on
+            |> X3m.System.MessageHandler.Unload.decide(
+              message,
+              new_state.client_state,
+              pid,
+              @pid_facade_name
+            )
+            |> case do
               :unload ->
                 reason = "Unloading aggregate because of it's state"
                 exit_process(message.aggregate_meta.id, {:normal, reason})

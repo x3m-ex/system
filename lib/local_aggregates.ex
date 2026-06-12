@@ -1,4 +1,17 @@
 defmodule X3m.System.LocalAggregates do
+  @moduledoc """
+  Declares which aggregate modules run on the local node.
+
+  `use` it with the list of aggregate modules to host; it defines a supervisor that
+  starts an aggregate group per module:
+
+      defmodule MyApp.LocalAggregates do
+        use X3m.System.LocalAggregates, [MyApp.Accounts.Aggregate, MyApp.Orders.Aggregate]
+      end
+
+  Wire it into your supervision tree through `X3m.System.LocalAggregatesSupervision`.
+  See the "Aggregates & Event Sourcing" guide for the full setup.
+  """
   defmacro __using__(opts) do
     quote do
       @moduledoc false

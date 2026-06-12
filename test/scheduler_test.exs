@@ -1,6 +1,5 @@
 defmodule X3m.System.SchedulerTest do
   use ExUnit.Case, async: true
-  require Logger
   alias X3m.System.Test.Scheduler
   alias X3m.System.Message
 
