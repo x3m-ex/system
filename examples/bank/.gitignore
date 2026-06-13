@@ -1,0 +1,9 @@
+_volumes/pg_data/*
+!_volumes/pg_data/.gitkeep
+_volumes/es_data/*
+!_volumes/es_data/.gitkeep
+_build/
+deps/
+*.beam
+*.ez
+.elixir_ls/

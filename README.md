@@ -32,7 +32,8 @@ One dependency is optional:
 
 ## A minimal example
 
-Define a router that registers a service and the module that handles it:
+Define a router that registers a service and the module that handles it,
+and register the services (typically from your application's `start/2`).
 
 ```elixir
 defmodule MyApp.Router do
@@ -51,14 +52,13 @@ defmodule MyApp.Greeter do
     {:reply, Message.ok(message, "Hello, #{name}!")}
   end
 end
+
+:ok = MyApp.Router.register_services()
 ```
 
-Register the services (typically from your application's `start/2`) and dispatch a
-message to the service by name:
+Dispatch a message to the service by name:
 
 ```elixir
-:ok = MyApp.Router.register_services()
-
 :greet
 |> X3m.System.Message.new(raw_request: %{"name" => "Ada"})
 |> X3m.System.Dispatcher.dispatch()
@@ -78,6 +78,30 @@ flowchart LR
 No aggregates or event store are involved here — any module registered through a
 router can be a dispatch target.
 
+## Dispatch accross the cluster
+
+If you want to try dispatch accross the cluster, run 2 iex sessions:
+
+```bash
+iex --sname x3m_1@localhost -S mix
+```
+
+and from the other terminal
+
+```bash
+iex --sname x3m_2@localhost -S mix
+```
+
+Define your router and message handler (Greeter here) and register your services in first iex session (like in example from above),
+and then from the second one, connect to the first node:
+
+```elixir
+Node.connect :"x3m_1@localhost"
+#=> true
+```
+
+... and then dispatch message the same way you did in previous example. Result will be the same.
+
 ## Guides
 
 - [Getting started](guides/getting-started.md) — install, optional deps, your first dispatch.
@@ -85,6 +109,12 @@ router can be a dispatch target.
 - [Aggregates & event sourcing](guides/aggregates-and-event-sourcing.md) — `Aggregate`, `MessageHandler`, persisting events, snapshotting and supervision.
 - [Distribution](guides/distribution.md) — service discovery across nodes, choosing the node, and forwarding.
 - [Scheduling](guides/scheduling.md) — persistable, future-dated message delivery with `Scheduler`.
+
+## Example
+
+The [Banking example](examples/bank/) is a complete poncho project demonstrating the
+full CQRS/ES flow — HTTP API, command aggregates, event store, listener-driven read
+model, and cross-node dispatch. See its README for setup and curl walkthrough.
 
 ## License
 
