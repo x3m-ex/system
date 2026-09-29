@@ -21,7 +21,8 @@ arrives after it is discarded. A handler still running at the timeout keeps runn
 local or remote, also when the caller exits. So the timeout does not cancel a handler: a
 provider should bound its own work, or hung handlers pile up at the callers' dispatch
 rate. If the handler raises, exits or throws, local or remote, or the remote node goes
-down, the response is `{:error, {:badrpc, reason}}` at once.
+down, the response is `{:error, {:badrpc, reason}}` at once. If a service, local or
+remote, returns other than `:ok`, the response is `{:error, {:badrpc, {:bad_return, value}}}`.
 
 If no node offers the service, the response is `{:service_unavailable, service_name}`.
 

@@ -5,6 +5,7 @@ defmodule X3m.System.DistributedDispatchTest do
   alias X3m.System.Dispatcher
   alias X3m.System.Message
   alias X3m.System.Test.DistRouter
+  alias X3m.System.Test.NonOkService
 
   # These services are hosted only on the peer nodes, never on this (manager) node, so the
   # exact same `Dispatcher.dispatch(msg)` call transparently routes across the cluster.
@@ -117,6 +118,17 @@ defmodule X3m.System.DistributedDispatchTest do
       assert [] == Task.Supervisor.children(X3m.System.TaskSupervisor)
     end
 
+    test "a relay killed mid-dispatch returns an error, not a service timeout" do
+      msg = Message.new(:slow_remote, raw_request: %{sleep_ms: 3_000, test_pid: self()})
+      dispatch = Task.async(fn -> Dispatcher.dispatch(msg, timeout: 2_000) end)
+
+      assert_receive {:handler, _handler}, 1_000
+      assert [relay] = Task.Supervisor.children(X3m.System.TaskSupervisor)
+      Process.exit(relay, :kill)
+
+      assert %Message{response: {:error, {:badrpc, {:EXIT, :killed}}}} = Task.await(dispatch)
+    end
+
     test "the remote handler keeps running after the dispatch timeout", %{server: server} do
       msg = Message.new(:slow_remote, raw_request: %{sleep_ms: 3_000, test_pid: self()})
 
@@ -184,6 +196,45 @@ defmodule X3m.System.DistributedDispatchTest do
 
       assert %Message{response: {:error, {:badrpc, {:throw, :handler_threw}}}} =
                Dispatcher.dispatch(msg, timeout: 1_000)
+    end
+  end
+
+  describe "service returning other than :ok" do
+    setup do
+      [server] = ClusterCase.start_nodes(1)
+
+      ClusterCase.register_router(server, NonOkService)
+      ClusterCase.wait_until_discovered(:not_ok, [server])
+
+      {:ok, server: server}
+    end
+
+    test "a remote one returns a bad return error, not a service timeout" do
+      msg = Message.new(:not_ok)
+
+      assert %Message{response: {:error, {:badrpc, {:bad_return, :not_ok}}}} =
+               Dispatcher.dispatch(msg, timeout: 1_000)
+    end
+
+    test "a remote one returning a handler tuple returns a bad return error" do
+      msg = Message.new(:handler_tuple)
+
+      assert %Message{response: {:error, {:badrpc, {:bad_return, {:handler, :not_a_monitor}}}}} =
+               Dispatcher.dispatch(msg, timeout: 1_000)
+    end
+
+    test "a remote one returning a badrpc tuple returns a bad return error" do
+      msg = Message.new(:badrpc_tuple)
+
+      assert %Message{response: {:error, {:badrpc, {:bad_return, {:badrpc, :not_a_failure}}}}} =
+               Dispatcher.dispatch(msg, timeout: 1_000)
+    end
+
+    test "a local one returns the same bad return error as a remote one", %{server: server} do
+      msg = Message.new(:not_ok)
+
+      assert %Message{response: {:error, {:badrpc, {:bad_return, :not_ok}}}} =
+               :rpc.call(server, Dispatcher, :dispatch, [msg, [timeout: 1_000]])
     end
   end
 

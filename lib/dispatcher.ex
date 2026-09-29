@@ -107,7 +107,9 @@ defmodule X3m.System.Dispatcher do
   When several nodes offer it, one is picked at random; a node may reply with
   `{:error, {:try_another_node, reason}}` to make the dispatcher try the next one.
   If the handler raises, exits or throws, local or remote, or the remote node goes
-  down, the response is `{:error, {:badrpc, reason}}` at once.
+  down, the response is `{:error, {:badrpc, reason}}` at once. If a service,
+  local or remote, returns other than `:ok`, the response is
+  `{:error, {:badrpc, {:bad_return, value}}}`.
   """
   @spec dispatch(Message.t()) :: Message.t()
   @spec dispatch(Message.t(), opts :: Keyword.t()) :: Message.t()
@@ -248,6 +250,10 @@ defmodule X3m.System.Dispatcher do
       {^tag, {:badrpc, reason}} ->
         Process.demonitor(relay_monitor, [:flush])
         Message.error(message, {:badrpc, reason})
+
+      # a relay sends before it exits normally, so its DOWN only arrives first on a crash
+      {:DOWN, ^relay_monitor, :process, _relay, reason} ->
+        Message.error(message, {:badrpc, {:EXIT, reason}})
     after
       timeout ->
         _stop_relay(relay, relay_monitor, tag)
@@ -264,7 +270,8 @@ defmodule X3m.System.Dispatcher do
     node
     |> _invoke(mod, message, timeout)
     |> case do
-      :ok -> _forward_reply(caller, caller_monitor, tag, message.id, nil)
+      {:returned, :ok} -> _forward_reply(caller, caller_monitor, tag, message.id, nil)
+      {:returned, value} -> send(caller, {tag, {:badrpc, {:bad_return, value}}})
       {:handler, monitor} -> _forward_reply(caller, caller_monitor, tag, message.id, monitor)
       {:badrpc, reason} -> send(caller, {tag, {:badrpc, reason}})
     end
@@ -275,15 +282,18 @@ defmodule X3m.System.Dispatcher do
   defp _invoke(:local, mod, %Message{} = message, _timeout) do
     %Task{ref: handler_monitor} =
       X3m.System.TaskSupervisor
-      |> Task.Supervisor.async_nolink(fn -> :ok = apply(mod, message.service_name, [message]) end)
+      |> Task.Supervisor.async_nolink(fn -> apply(mod, message.service_name, [message]) end)
 
     {:handler, handler_monitor}
   end
 
-  # bounded, so a relay whose caller died early does not wait on the handler forever
+  # bounded, so an orphaned relay stops; tagged, so a service return is never read as ours
   defp _invoke(node, mod, %Message{} = message, timeout) do
     remote_timeout = _remote_timeout(timeout)
-    _erpc_call(node, mod, message.service_name, [message], remote_timeout)
+    returned = :erpc.call(node, mod, message.service_name, [message], remote_timeout)
+    {:returned, returned}
+  catch
+    kind, reason -> {:badrpc, _badrpc_reason(kind, reason)}
   end
 
   defp _erpc_call(node, mod, fun, args, timeout) do
@@ -314,6 +324,9 @@ defmodule X3m.System.Dispatcher do
 
       {^handler_monitor, :ok} ->
         _forward_reply(caller, caller_monitor, tag, message_id, handler_monitor)
+
+      {^handler_monitor, returned} ->
+        send(caller, {tag, {:badrpc, {:bad_return, returned}}})
 
       {:DOWN, ^caller_monitor, :process, _caller, _reason} ->
         :ok

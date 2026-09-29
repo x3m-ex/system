@@ -1,3 +1,9 @@
+# 0.9.3
+
+- Fix `Dispatcher.dispatch/2` waiting for the timeout (forever with `:infinity`) when a
+  remote service returns other than `:ok`; any non-`:ok` service return, local or remote,
+  is now `{:error, {:badrpc, {:bad_return, value}}}`
+
 # 0.9.2
 
 - Fix `Dispatcher.dispatch/2` `:timeout` not firing while a remote handler blocks
