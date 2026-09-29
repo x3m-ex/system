@@ -1,7 +1,7 @@
 defmodule X3m.System.MixProject do
   use Mix.Project
 
-  @version "0.9.1"
+  @version "0.9.2"
   @source_url "https://github.com/x3m-ex/system"
 
   def project do
@@ -29,7 +29,7 @@ defmodule X3m.System.MixProject do
   defp _docs do
     [
       main: "readme",
-      source_ref: "v#{@version}",
+      source_ref: @version,
       extras: [
         "README.md",
         "guides/getting-started.md",
@@ -37,6 +37,7 @@ defmodule X3m.System.MixProject do
         "guides/aggregates-and-event-sourcing.md",
         "guides/distribution.md",
         "guides/scheduling.md",
+        "guides/telemetry.md",
         "CHANGELOG.md"
       ],
       groups_for_extras: [

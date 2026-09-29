@@ -20,6 +20,17 @@ defmodule X3m.System.DistributedDispatchTest do
     assert %Message{response: {:ok, :from_first}} = Dispatcher.dispatch(msg)
   end
 
+  test "an infinite timeout is accepted for a remote service" do
+    [server] = ClusterCase.start_nodes(1)
+
+    ClusterCase.register_router(server, DistRouter)
+    ClusterCase.wait_until_discovered(:remote_first, [server])
+
+    msg = Message.new(:remote_first)
+
+    assert %Message{response: {:ok, :from_first}} = Dispatcher.dispatch(msg, timeout: :infinity)
+  end
+
   test "when every remote node asks for another node, no node is available" do
     [server_1, server_2] = ClusterCase.start_nodes(2)
 
@@ -52,5 +63,181 @@ defmodule X3m.System.DistributedDispatchTest do
     msg = Message.new(:maybe_another_node)
 
     assert %Message{response: {:ok, :from_quorum}} = Dispatcher.dispatch(msg)
+  end
+
+  describe "slow remote handler" do
+    setup do
+      {cluster, [server]} = ClusterCase.start_cluster(1)
+
+      ClusterCase.register_router(server, DistRouter)
+      ClusterCase.wait_until_discovered(:slow_remote, [server])
+
+      {:ok, cluster: cluster, server: server}
+    end
+
+    test "times out at the dispatch timeout, not when the handler returns" do
+      msg = Message.new(:slow_remote, raw_request: %{sleep_ms: 3_000})
+      started_at = System.monotonic_time(:millisecond)
+
+      assert %Message{response: {:service_timeout, :slow_remote, _id, 200}} =
+               Dispatcher.dispatch(msg, timeout: 200)
+
+      assert System.monotonic_time(:millisecond) - started_at < 1_000
+    end
+
+    test "the dispatch timeout wins over the remote call's own timeout" do
+      msg = Message.new(:slow_remote, raw_request: %{sleep_ms: 1_000})
+
+      responses =
+        1..200
+        |> Enum.map(fn _attempt -> Dispatcher.dispatch(msg, timeout: 0).response end)
+        |> Enum.uniq()
+
+      assert [{:service_timeout, :slow_remote, msg.id, 0}] == responses
+    end
+
+    test "a late reply after the timeout does not reach the caller" do
+      msg = Message.new(:slow_remote, raw_request: %{sleep_ms: 400})
+
+      assert %Message{response: {:service_timeout, :slow_remote, _id, 100}} =
+               Dispatcher.dispatch(msg, timeout: 100)
+
+      refute_receive _late_message, 1_000
+    end
+
+    test "a relay whose caller dies early stops once the remote call times out" do
+      msg = Message.new(:slow_remote, raw_request: %{sleep_ms: 4_000})
+      caller = spawn(fn -> Dispatcher.dispatch(msg, timeout: 500) end)
+
+      Process.sleep(100)
+      assert [_relay] = Task.Supervisor.children(X3m.System.TaskSupervisor)
+      Process.exit(caller, :kill)
+
+      Process.sleep(2_500)
+      assert [] == Task.Supervisor.children(X3m.System.TaskSupervisor)
+    end
+
+    test "the remote handler keeps running after the dispatch timeout", %{server: server} do
+      msg = Message.new(:slow_remote, raw_request: %{sleep_ms: 3_000, test_pid: self()})
+
+      assert %Message{response: {:service_timeout, :slow_remote, _id, 100}} =
+               Dispatcher.dispatch(msg, timeout: 100)
+
+      assert_receive {:handler, handler}, 2_000
+      assert node(handler) == server
+      assert :rpc.call(server, Process, :alive?, [handler])
+    end
+
+    test "the remote handler keeps running after its caller dies", %{server: server} do
+      test_pid = self()
+      msg = Message.new(:slow_remote, raw_request: %{sleep_ms: 3_000, test_pid: test_pid})
+      caller = spawn(fn -> Dispatcher.dispatch(msg, timeout: 5_000) end)
+
+      assert_receive {:handler, handler}, 2_000
+      Process.exit(caller, :kill)
+      Process.sleep(200)
+
+      assert :rpc.call(server, Process, :alive?, [handler])
+    end
+
+    test "the node going down mid-call returns an error", %{cluster: cluster, server: server} do
+      msg = Message.new(:slow_remote, raw_request: %{sleep_ms: 5_000})
+
+      spawn(fn ->
+        Process.sleep(200)
+        LocalCluster.stop(cluster, server)
+      end)
+
+      assert %Message{response: {:error, {:badrpc, :nodedown}}} =
+               Dispatcher.dispatch(msg, timeout: 10_000)
+    end
+  end
+
+  describe "failing remote handler" do
+    setup do
+      [server] = ClusterCase.start_nodes(1)
+
+      ClusterCase.register_router(server, DistRouter)
+      ClusterCase.wait_until_discovered(:throwing_remote, [server])
+
+      :ok
+    end
+
+    test "a raise returns an error" do
+      msg = Message.new(:raising_remote)
+
+      assert %Message{
+               response:
+                 {:error, {:badrpc, {:EXIT, {%RuntimeError{message: "handler failed"}, _stack}}}}
+             } = Dispatcher.dispatch(msg, timeout: 1_000)
+    end
+
+    test "an exit returns an error" do
+      msg = Message.new(:exiting_remote)
+
+      assert %Message{response: {:error, {:badrpc, {:EXIT, :handler_exited}}}} =
+               Dispatcher.dispatch(msg, timeout: 1_000)
+    end
+
+    test "a throw returns an error" do
+      msg = Message.new(:throwing_remote)
+
+      assert %Message{response: {:error, {:badrpc, {:throw, :handler_threw}}}} =
+               Dispatcher.dispatch(msg, timeout: 1_000)
+    end
+  end
+
+  describe "remote authorization" do
+    test "is answered by the providing node" do
+      [server] = ClusterCase.start_nodes(1)
+
+      ClusterCase.register_router(server, DistRouter)
+      ClusterCase.wait_until_discovered(:remote_first, [server])
+
+      assert true == Dispatcher.authorized?(Message.new(:remote_first))
+    end
+
+    test "a check slower than the timeout returns an error at the timeout" do
+      [server] = ClusterCase.start_nodes(1)
+
+      ClusterCase.register_router(server, DistRouter)
+      ClusterCase.wait_until_discovered(:remote_first, [server])
+
+      msg = Message.new(:remote_first, raw_request: %{authorize_sleep_ms: 3_000})
+      started_at = System.monotonic_time(:millisecond)
+
+      assert {:error, {:badrpc, :timeout}} == Dispatcher.authorized?(msg, timeout: 200)
+      assert System.monotonic_time(:millisecond) - started_at < 1_000
+    end
+
+    test "the node going down mid-check returns an error" do
+      {cluster, [server]} = ClusterCase.start_cluster(1)
+
+      ClusterCase.register_router(server, DistRouter)
+      ClusterCase.wait_until_discovered(:remote_first, [server])
+
+      msg = Message.new(:remote_first, raw_request: %{authorize_sleep_ms: 5_000})
+
+      spawn(fn ->
+        Process.sleep(200)
+        LocalCluster.stop(cluster, server)
+      end)
+
+      assert {:error, {:badrpc, :nodedown}} == Dispatcher.authorized?(msg, timeout: 10_000)
+    end
+
+    test "a failing node is skipped for the next provider" do
+      [server_1, server_2] = ClusterCase.start_nodes(2)
+
+      ClusterCase.register_router(server_1, DistRouter)
+      ClusterCase.register_router(server_2, DistRouter)
+      ClusterCase.wait_until_discovered(:remote_first, [server_1, server_2])
+
+      msg = Message.new(:remote_first)
+      [{first_asked, _router} | _other_providers] = Dispatcher.discover_service(msg)
+      ClusterCase.put_node_env(first_asked, :fail_authorize?, true)
+
+      assert true == Dispatcher.authorized?(msg)
+    end
   end
 end

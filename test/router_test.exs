@@ -10,7 +10,12 @@ defmodule X3m.System.RouterTest do
                unauthorized_service: 1,
                custom_unauthorized_service: 1,
                try_another_node: 1,
-               admin_only: 1
+               admin_only: 1,
+               slow: 1,
+               raising: 1,
+               throwing: 1,
+               exiting: 1,
+               delegated: 1
              ] =
                Router.registered_services(:public)
     end
@@ -26,7 +31,12 @@ defmodule X3m.System.RouterTest do
                unauthorized_service: 1,
                custom_unauthorized_service: 1,
                try_another_node: 1,
-               admin_only: 1
+               admin_only: 1,
+               slow: 1,
+               raising: 1,
+               throwing: 1,
+               exiting: 1,
+               delegated: 1
              ] = Router.registered_services(:all)
     end
   end

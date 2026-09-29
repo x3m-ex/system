@@ -21,7 +21,7 @@ and use the scheduler independently of everything else.
 ```elixir
 def deps do
   [
-    {:x3m_system, "~> 0.9.1"}
+    {:x3m_system, "~> 0.9.2"}
   ]
 end
 ```
@@ -109,13 +109,14 @@ Node.connect :"x3m_1@localhost"
 - [Aggregates & event sourcing](guides/aggregates-and-event-sourcing.md) — `Aggregate`, `MessageHandler`, persisting events, snapshotting and supervision.
 - [Distribution](guides/distribution.md) — service discovery across nodes, choosing the node, and forwarding.
 - [Scheduling](guides/scheduling.md) — persistable, future-dated message delivery with `Scheduler`.
+- [Telemetry](guides/telemetry.md) — the emitted events, their measurements, metadata and units.
 
 ## Example
 
-The [Banking example](examples/bank/) is a complete poncho project demonstrating the
+The [Banking example](https://github.com/x3m-ex/system/tree/main/examples/bank) is a complete poncho project demonstrating the
 full CQRS/ES flow — HTTP API, command aggregates, event store, listener-driven read
 model, and cross-node dispatch. See its README for setup and curl walkthrough.
 
 ## License
 
-Released under the MIT License. See the [LICENSE](https://github.com/x3m-ex/system/blob/master/LICENSE) file.
+Released under the MIT License. See the [LICENSE](https://github.com/x3m-ex/system/blob/main/LICENSE) file.

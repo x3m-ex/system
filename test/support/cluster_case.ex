@@ -19,6 +19,17 @@ defmodule X3m.System.ClusterCase do
   """
   @spec start_nodes(count :: pos_integer(), opts :: Keyword.t()) :: [node()]
   def start_nodes(count, opts \\ []) do
+    {_cluster, nodes} = start_cluster(count, opts)
+    nodes
+  end
+
+  @doc """
+  Same as `start_nodes/2`, but also returns the cluster so a test can stop a single node
+  with `LocalCluster.stop/2`.
+  """
+  @spec start_cluster(count :: pos_integer(), opts :: Keyword.t()) ::
+          {cluster :: pid(), nodes :: [node()]}
+  def start_cluster(count, opts \\ []) do
     # A unique prefix per cluster keeps node names from colliding across tests, so a dead
     # node's async cleanup can never race with a same-named node in a later test.
     opts = Keyword.put_new(opts, :applications, [:x3m_system])
@@ -33,7 +44,7 @@ defmodule X3m.System.ClusterCase do
       Enum.each(nodes, fn node -> send(ServiceRegistry, {:unregister_node_services, node}) end)
     end)
 
-    nodes
+    {cluster, nodes}
   end
 
   @doc "Registers `router`'s services on `node`, making `node` a provider for them."

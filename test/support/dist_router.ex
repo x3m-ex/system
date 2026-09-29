@@ -8,10 +8,25 @@ defmodule X3m.System.Test.DistRouter do
 
   use X3m.System.Router
 
+  alias X3m.System.Message
   alias X3m.System.Test.Controller
 
   service :remote_first, Controller, :first
   service :maybe_another_node, Controller
+  service :slow_remote, Controller, :slow
+  service :raising_remote, Controller, :raising
+  service :throwing_remote, Controller, :throwing
+  service :exiting_remote, Controller, :exiting
 
-  def authorize(_), do: :ok
+  def authorize(%Message{raw_request: %{authorize_sleep_ms: sleep_ms}}) do
+    Process.sleep(sleep_ms)
+    :ok
+  end
+
+  # node-local, so each peer can be told independently to fail its checks
+  def authorize(%Message{}) do
+    if Application.get_env(:x3m_system, :fail_authorize?, false),
+      do: raise("authorization failed"),
+      else: :ok
+  end
 end

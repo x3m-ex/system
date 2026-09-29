@@ -36,6 +36,76 @@ defmodule X3m.System.DispatcherTest do
     assert %Message{response: {:ok, :from_private}} = Dispatcher.dispatch(msg)
   end
 
+  test "a late local reply after the timeout does not reach the caller" do
+    msg = Message.new(:slow, raw_request: %{sleep_ms: 300, test_pid: self()})
+
+    assert %Message{response: {:service_timeout, :slow, _id, 100}} =
+             Dispatcher.dispatch(msg, timeout: 100)
+
+    assert_receive {:handler, handler}
+    _await_exit(handler)
+
+    refute_receive _late_message, 100
+  end
+
+  test "a local handler keeps running after the dispatch timeout" do
+    msg = Message.new(:slow, raw_request: %{sleep_ms: 500, test_pid: self()})
+
+    assert %Message{response: {:service_timeout, :slow, _id, 100}} =
+             Dispatcher.dispatch(msg, timeout: 100)
+
+    assert_receive {:handler, handler}
+    assert Process.alive?(handler)
+    _await_exit(handler)
+  end
+
+  describe "failing local handler" do
+    test "a raise returns an error without waiting for the timeout" do
+      started_at = System.monotonic_time(:millisecond)
+
+      assert %Message{
+               response:
+                 {:error, {:badrpc, {:EXIT, {%RuntimeError{message: "handler failed"}, _stack}}}}
+             } = Dispatcher.dispatch(Message.new(:raising), timeout: 5_000)
+
+      assert System.monotonic_time(:millisecond) - started_at < 1_000
+    end
+
+    test "an exit returns an error" do
+      assert %Message{response: {:error, {:badrpc, {:EXIT, :handler_exited}}}} =
+               Dispatcher.dispatch(Message.new(:exiting), timeout: 5_000)
+    end
+
+    test "a throw returns an error" do
+      assert %Message{response: {:error, {:badrpc, {:throw, :handler_threw}}}} =
+               Dispatcher.dispatch(Message.new(:throwing), timeout: 5_000)
+    end
+  end
+
+  describe "handler replying from another process after it returned" do
+    test "always answers" do
+      msg = Message.new(:delegated, raw_request: %{reply_after_ms: 5})
+
+      responses =
+        1..500
+        |> Enum.map(fn _attempt -> Dispatcher.dispatch(msg, timeout: 1_000).response end)
+        |> Enum.uniq()
+
+      assert [{:ok, :from_delegate}] == responses
+    end
+
+    test "always times out when the reply comes too late" do
+      msg = Message.new(:delegated, raw_request: %{reply_after_ms: 50})
+
+      responses =
+        1..200
+        |> Enum.map(fn _attempt -> Dispatcher.dispatch(msg, timeout: 10).response end)
+        |> Enum.uniq()
+
+      assert [{:service_timeout, :delegated, msg.id, 10}] == responses
+    end
+  end
+
   test "if service call is authorized" do
     assert Dispatcher.authorized?(_new_message(:first)) == true
     assert Dispatcher.authorized?(_new_message(:private_service)) == true
@@ -301,6 +371,12 @@ defmodule X3m.System.DispatcherTest do
       assert Dispatcher.authorized?(msg) == false
       assert %Message{response: {:error, :forbidden}} = Dispatcher.dispatch(msg)
     end
+  end
+
+  # a handler that outlives its test would emit telemetry into the next test's handlers
+  defp _await_exit(handler) do
+    ref = Process.monitor(handler)
+    assert_receive {:DOWN, ^ref, :process, ^handler, :normal}, 1_000
   end
 
   defp _new_message(service_name) do
