@@ -13,6 +13,7 @@
 - `Dispatcher.authorized?` asks the next provider when a remote one fails, and returns
   `{:error, {:badrpc, reason}}` instead of a raw `{:badrpc, reason}` when all fail
 - Fix the `Dispatcher.authorized?` spec: `:service_unavailable` is returned as a bare atom
+- Add a Telemetry guide documenting every event, its measurements and units
 
 # 0.9.1
 

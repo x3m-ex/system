@@ -37,6 +37,7 @@ defmodule X3m.System.MixProject do
         "guides/aggregates-and-event-sourcing.md",
         "guides/distribution.md",
         "guides/scheduling.md",
+        "guides/telemetry.md",
         "CHANGELOG.md"
       ],
       groups_for_extras: [
