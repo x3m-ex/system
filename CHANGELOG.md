@@ -1,3 +1,19 @@
+# 0.9.2 (unreleased)
+
+- Fix `Dispatcher.dispatch/2` `:timeout` not firing while a remote handler blocks
+- Fix a reply arriving after a dispatch timeout leaking into the caller's mailbox
+- Return `{:error, {:badrpc, reason}}` instead of crashing when a remote call fails
+  (node down, handler raised, exited or threw)
+- A local handler that raises, exits or throws returns `{:error, {:badrpc, reason}}` at
+  once, as a remote one does, instead of `service_timeout` after the full timeout
+- A timed-out dispatch does not cancel its handler, so hung remote handlers now
+  accumulate per dispatch rather than per caller; providers should bound their own work
+- Invoke remote services over `:erpc`
+- Add a `:timeout` option to `Dispatcher.authorized?/2` (default 5s) for a remote check
+- `Dispatcher.authorized?` asks the next provider when a remote one fails, and returns
+  `{:error, {:badrpc, reason}}` instead of a raw `{:badrpc, reason}` when all fail
+- Fix the `Dispatcher.authorized?` spec: `:service_unavailable` is returned as a bare atom
+
 # 0.9.1
 
 - Add set_state optional callback to Aggregate

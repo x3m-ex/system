@@ -12,8 +12,16 @@ other connected nodes, and nodes exchange their service maps as they join and le
 cluster. The dispatcher asks this registry which nodes offer `message.service_name`:
 
 - a **local** provider is invoked directly in a supervised task;
-- a **remote** provider is invoked over `:rpc`, and the provider sends the reply
-  straight back to the caller's process.
+- a **remote** provider is invoked over `:erpc` from a supervised task on the caller's
+  node, and the provider sends the reply straight back to that task, which hands it to
+  the caller.
+
+Either way the dispatch timeout holds even while the handler blocks, and a reply that
+arrives after it is discarded. A handler still running at the timeout keeps running,
+local or remote, also when the caller exits. So the timeout does not cancel a handler: a
+provider should bound its own work, or hung handlers pile up at the callers' dispatch
+rate. If the handler raises, exits or throws, local or remote, or the remote node goes
+down, the response is `{:error, {:badrpc, reason}}` at once.
 
 If no node offers the service, the response is `{:service_unavailable, service_name}`.
 

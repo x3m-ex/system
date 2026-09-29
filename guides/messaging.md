@@ -130,7 +130,8 @@ sequenceDiagram
 ```
 
 - The default timeout is 5000 ms; on expiry the response becomes
-  `{:service_timeout, service_name, message_id, timeout}`.
+  `{:service_timeout, service_name, message_id, timeout}`, even if the handler is
+  still running. A reply arriving after that is discarded.
 - If no node offers the service, the response is
   `{:service_unavailable, service_name}`.
 

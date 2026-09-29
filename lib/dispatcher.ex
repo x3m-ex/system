@@ -13,9 +13,9 @@ defmodule X3m.System.Dispatcher do
 
   Service discovery is transparent: the dispatcher asks the (internal) service
   registry which nodes provide `message.service_name`. A **local** provider is invoked
-  directly; **remote** providers are invoked over `:rpc`. The reply is delivered back
-  to the calling process, so `dispatch/2` returns the resolved `X3m.System.Message`
-  with its `response` set. See the "Distribution" guide for how nodes are chosen and
+  in a supervised task; **remote** providers are invoked over `:erpc` from one. The reply
+  is delivered back to the calling process, so `dispatch/2` returns the resolved
+  `X3m.System.Message` with its `response` set. See the "Distribution" guide for how nodes are chosen and
   how a service can ask the dispatcher to `:try_another_node`.
 
   Using the dispatcher does **not** require aggregates or event sourcing — any module
@@ -23,15 +23,31 @@ defmodule X3m.System.Dispatcher do
   """
   alias X3m.System.{Message, Response, Instrumenter, ServiceRegistry}
 
+  @type authorization :: boolean() | :service_unavailable | {:error, {:badrpc, reason :: term()}}
+
+  # the remote call outlasts the dispatch timeout, so the caller's timeout always fires first
+  @remote_timeout_margin_ms 1_000
+
   @doc """
   Returns whether the (discovered) service authorizes `message`.
 
   Discovery is performed first; if no node offers the service `:service_unavailable`
   is returned. Otherwise authorization is delegated to the providing node's router
   (`X3m.System.Router` `authorize/1`).
+
+  Options:
+
+    * `:timeout` - milliseconds to wait for a remote node's answer (default `5_000`).
+      Each provider tried gets the full timeout, so the worst case is providers x timeout.
+
+  If a remote node fails the check (it times out, goes down, or its `authorize/1`
+  raises, exits or throws), the next providing node is asked. When every one fails,
+  `{:error, {:badrpc, reason}}` of the last one is returned.
   """
-  @spec authorized?(Message.t()) :: boolean() | {:service_unavailable, atom}
-  def authorized?(%Message{} = message) do
+  @spec authorized?(Message.t()) :: authorization()
+  @spec authorized?(Message.t(), opts :: Keyword.t()) :: authorization()
+  def authorized?(%Message{} = message, opts \\ []) do
+    timeout = Keyword.get(opts, :timeout, 5_000)
     mono_start = System.monotonic_time()
     message = %{message | invoked_at: DateTime.utc_now(), reply_to: self()}
 
@@ -47,9 +63,8 @@ defmodule X3m.System.Dispatcher do
       :not_found ->
         :service_unavailable
 
-      # we can ask any node for authorization
-      [{node, mod} | _] ->
-        _authorized?(node, mod, message)
+      nodes ->
+        _authorized_on_nodes(nodes, message, timeout)
     end
   end
 
@@ -83,11 +98,16 @@ defmodule X3m.System.Dispatcher do
   Options:
 
     * `:timeout` - milliseconds to wait for the service reply (default `5_000`). On
-      expiry the response is set to `Response.service_timeout/3`.
+      expiry the response is set to `Response.service_timeout/3`, even if the handler
+      is still running; a later reply is discarded. The handler, local or remote, is
+      not cancelled: a provider should bound its own work, or hung handlers pile up
+      at the callers' dispatch rate.
 
   If no node offers the service the response is set to `Response.service_unavailable/1`.
   When several nodes offer it, one is picked at random; a node may reply with
   `{:error, {:try_another_node, reason}}` to make the dispatcher try the next one.
+  If the handler raises, exits or throws, local or remote, or the remote node goes
+  down, the response is `{:error, {:badrpc, reason}}` at once.
   """
   @spec dispatch(Message.t()) :: Message.t()
   @spec dispatch(Message.t(), opts :: Keyword.t()) :: Message.t()
@@ -165,11 +185,22 @@ defmodule X3m.System.Dispatcher do
     end
   end
 
-  defp _authorized?(:local, mod, %Message{} = message),
+  # any providing node can answer, and a check has no side effects, so a failure moves on
+  defp _authorized_on_nodes([{node, mod} | nodes], %Message{} = message, timeout) do
+    node
+    |> _authorized?(mod, message, timeout)
+    |> case do
+      {:badrpc, reason} when nodes == [] -> {:error, {:badrpc, reason}}
+      {:badrpc, _reason} -> _authorized_on_nodes(nodes, message, timeout)
+      authorized? -> authorized?
+    end
+  end
+
+  defp _authorized?(:local, mod, %Message{} = message, _timeout),
     do: apply(mod, :authorized?, [message])
 
-  defp _authorized?(node, mod, %Message{} = message),
-    do: :rpc.call(node, mod, :authorized?, [message])
+  defp _authorized?(node, mod, %Message{} = message, timeout),
+    do: _erpc_call(node, mod, :authorized?, [message], timeout)
 
   defp _dispatch(node, mod, %Message{} = message, timeout, mono_start) do
     Instrumenter.execute(
@@ -197,30 +228,120 @@ defmodule X3m.System.Dispatcher do
     message
   end
 
-  defp _dispatch(:local, mod, %Message{} = message, timeout) do
-    # if calling function does something with big binaries, they can leak if
-    # caller process is long-lived (refc binary leaks)
-    X3m.System.TaskSupervisor
-    |> Task.Supervisor.start_child(fn ->
-      :ok = apply(mod, message.service_name, [message])
-    end)
-
-    _wait_for_response(message, timeout)
-  end
-
+  # A relay process invokes the service and receives its reply, so the caller's timeout
+  # holds even when the invocation blocks, and a late reply dies with the relay.
   defp _dispatch(node, mod, %Message{} = message, timeout) do
-    :ok = :rpc.call(node, mod, message.service_name, [message])
-    _wait_for_response(message, timeout)
-  end
+    caller = self()
+    tag = make_ref()
 
-  defp _wait_for_response(%Message{id: message_id} = message, timeout) do
+    {:ok, relay} =
+      X3m.System.TaskSupervisor
+      |> Task.Supervisor.start_child(fn -> _relay(caller, tag, node, mod, message, timeout) end)
+
+    relay_monitor = Process.monitor(relay)
+
     receive do
-      %Message{id: ^message_id} = message -> message
+      {^tag, %Message{} = reply} ->
+        Process.demonitor(relay_monitor, [:flush])
+        %{reply | reply_to: caller}
+
+      {^tag, {:badrpc, reason}} ->
+        Process.demonitor(relay_monitor, [:flush])
+        Message.error(message, {:badrpc, reason})
     after
       timeout ->
+        _stop_relay(relay, relay_monitor, tag)
         response = Response.service_timeout(message.service_name, message.id, timeout)
 
         Message.return(message, response)
+    end
+  end
+
+  defp _relay(caller, tag, node, mod, %Message{} = message, timeout) do
+    caller_monitor = Process.monitor(caller)
+    message = %{message | reply_to: self()}
+
+    node
+    |> _invoke(mod, message, timeout)
+    |> case do
+      :ok -> _forward_reply(caller, caller_monitor, tag, message.id, nil)
+      {:handler, monitor} -> _forward_reply(caller, caller_monitor, tag, message.id, monitor)
+      {:badrpc, reason} -> send(caller, {tag, {:badrpc, reason}})
+    end
+  end
+
+  # own unlinked task, so like a remote handler it outlives the relay when the dispatch
+  # times out; monitored from its spawn, so its crash is reported as a remote one is
+  defp _invoke(:local, mod, %Message{} = message, _timeout) do
+    %Task{ref: handler_monitor} =
+      X3m.System.TaskSupervisor
+      |> Task.Supervisor.async_nolink(fn -> :ok = apply(mod, message.service_name, [message]) end)
+
+    {:handler, handler_monitor}
+  end
+
+  # bounded, so a relay whose caller died early does not wait on the handler forever
+  defp _invoke(node, mod, %Message{} = message, timeout) do
+    remote_timeout = _remote_timeout(timeout)
+    _erpc_call(node, mod, message.service_name, [message], remote_timeout)
+  end
+
+  defp _erpc_call(node, mod, fun, args, timeout) do
+    :erpc.call(node, mod, fun, args, timeout)
+  catch
+    kind, reason -> {:badrpc, _badrpc_reason(kind, reason)}
+  end
+
+  defp _remote_timeout(:infinity), do: :infinity
+  defp _remote_timeout(timeout), do: timeout + @remote_timeout_margin_ms
+
+  # same shapes as `:rpc.call/5`, plus `{:throw, value}` where `:rpc` returns the value
+  defp _badrpc_reason(:error, {:erpc, :noconnection}), do: :nodedown
+  defp _badrpc_reason(:error, {:erpc, :timeout}), do: :timeout
+  defp _badrpc_reason(:error, {:erpc, :notsup}), do: :notsup
+  defp _badrpc_reason(:error, {:erpc, reason}), do: {:EXIT, reason}
+  defp _badrpc_reason(:error, {:exception, reason, stack}), do: {:EXIT, {reason, stack}}
+  defp _badrpc_reason(:exit, {:exception, reason}), do: {:EXIT, reason}
+  defp _badrpc_reason(:exit, {:signal, reason}), do: {:EXIT, reason}
+  defp _badrpc_reason(:throw, value), do: {:throw, value}
+
+  # a reply the handler sends itself arrives before its DOWN; after a normal exit another
+  # process may still answer, so only a crash ends the wait
+  defp _forward_reply(caller, caller_monitor, tag, message_id, handler_monitor) do
+    receive do
+      %Message{id: ^message_id} = reply ->
+        send(caller, {tag, reply})
+
+      {^handler_monitor, :ok} ->
+        _forward_reply(caller, caller_monitor, tag, message_id, handler_monitor)
+
+      {:DOWN, ^caller_monitor, :process, _caller, _reason} ->
+        :ok
+
+      {:DOWN, ^handler_monitor, :process, _handler, :normal} ->
+        _forward_reply(caller, caller_monitor, tag, message_id, nil)
+
+      {:DOWN, ^handler_monitor, :process, _handler, reason} ->
+        send(caller, {tag, {:badrpc, _crash_reason(reason)}})
+    end
+  end
+
+  # same shapes as a remote handler's crash
+  defp _crash_reason({{:nocatch, value}, _stack}), do: {:throw, value}
+  defp _crash_reason(reason), do: {:EXIT, reason}
+
+  # DOWN arrives after anything the relay sent, so the flush below catches a reply in flight.
+  defp _stop_relay(relay, relay_monitor, tag) do
+    Process.exit(relay, :kill)
+
+    receive do
+      {:DOWN, ^relay_monitor, :process, _relay, _reason} -> :ok
+    end
+
+    receive do
+      {^tag, _reply} -> :ok
+    after
+      0 -> :ok
     end
   end
 
