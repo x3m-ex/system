@@ -3,6 +3,8 @@
 - Fix `Dispatcher.dispatch/2` waiting for the timeout (forever with `:infinity`) when a
   remote service returns other than `:ok`; any non-`:ok` service return, local or remote,
   is now `{:error, {:badrpc, {:bad_return, value}}}`
+- A dispatch whose relay crashes returns `{:error, {:badrpc, {:EXIT, reason}}}` at once
+  instead of waiting for the timeout
 
 # 0.9.2
 

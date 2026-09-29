@@ -30,9 +30,23 @@ defmodule X3m.System.AggregateRegistryTest do
 
     assert :ok == Registry.register(reg, "k2", pid)
     Process.exit(pid, :kill)
-    Process.sleep(50)
 
-    assert :error == Registry.get(reg, "k2")
+    assert :ok == _await_removal(reg, "k2", 1_000)
     assert Registry.has_key?(reg, "k2") == false
+  end
+
+  # the registry drops the entry when it handles the DOWN, asynchronously to this process
+  defp _await_removal(reg, key, deadline_ms) do
+    case {Registry.get(reg, key), deadline_ms} do
+      {:error, _deadline_ms} ->
+        :ok
+
+      {{:ok, _pid}, deadline_ms} when deadline_ms > 0 ->
+        Process.sleep(10)
+        _await_removal(reg, key, deadline_ms - 10)
+
+      {{:ok, pid}, _deadline_ms} ->
+        {:still_registered, pid}
+    end
   end
 end
