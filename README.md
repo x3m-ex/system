@@ -21,7 +21,7 @@ and use the scheduler independently of everything else.
 ```elixir
 def deps do
   [
-    {:x3m_system, "~> 0.9.1"}
+    {:x3m_system, "~> 0.9.2"}
   ]
 end
 ```

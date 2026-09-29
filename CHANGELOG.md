@@ -1,4 +1,4 @@
-# 0.9.2 (unreleased)
+# 0.9.2
 
 - Fix `Dispatcher.dispatch/2` `:timeout` not firing while a remote handler blocks
 - Fix a reply arriving after a dispatch timeout leaking into the caller's mailbox
@@ -14,6 +14,7 @@
   `{:error, {:badrpc, reason}}` instead of a raw `{:badrpc, reason}` when all fail
 - Fix the `Dispatcher.authorized?` spec: `:service_unavailable` is returned as a bare atom
 - Add a Telemetry guide documenting every event, its measurements and units
+- Fix hexdocs "view source" links to point at the version tag
 
 # 0.9.1
 
