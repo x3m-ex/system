@@ -21,7 +21,10 @@ defmodule X3m.System.MixProject do
       docs: _docs(),
       aliases: _aliases(),
       deps: _deps(),
-      dialyzer: [plt_add_apps: [:ex_unit, :local_cluster, :ecto]],
+      dialyzer: [
+        plt_add_apps: [:ex_unit, :local_cluster, :ecto],
+        plt_core_path: "_build/#{Mix.env()}"
+      ],
       elixirc_paths: _elixirc_paths(Mix.env())
     ]
   end

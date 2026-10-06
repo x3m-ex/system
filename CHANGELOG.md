@@ -1,3 +1,11 @@
+# Unreleased
+
+- Service discovery no longer serializes through the registry process; with the registry
+  not running, dispatch and `authorized?` report the service unavailable instead of
+  exiting the caller
+- A router's `register_services/0` returns once its services are discoverable on
+  its own node
+
 # 0.9.3
 
 - Fix `Dispatcher.dispatch/2` waiting for the timeout (forever with `:infinity`) when a

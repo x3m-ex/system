@@ -1,6 +1,7 @@
 defmodule X3m.System.DispatcherTest do
   use ExUnit.Case, async: false
-  alias X3m.System.{Message, Dispatcher}
+  alias X3m.System.{Message, Dispatcher, Instrumenter, ServiceRegistry}
+  alias X3m.System.Test.NonOkService
 
   test "invoke unavailable service" do
     msg = _new_message(:wrong_service)
@@ -371,6 +372,121 @@ defmodule X3m.System.DispatcherTest do
       assert Dispatcher.authorized?(msg) == false
       assert %Message{response: {:error, :forbidden}} = Dispatcher.dispatch(msg)
     end
+  end
+
+  describe "discovery" do
+    test "a missing service is logged as a warning" do
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          assert %Message{response: {:service_unavailable, :wrong_service}} =
+                   Dispatcher.dispatch(_new_message(:wrong_service))
+        end)
+
+      assert log =~ "[Discovery] Service wrong_service NOT found!"
+    end
+
+    test "does not wait for a busy service registry" do
+      :ok = :sys.suspend(ServiceRegistry)
+      on_exit(fn -> :sys.resume(ServiceRegistry) end)
+
+      assert true == Dispatcher.authorized?(_new_message(:first))
+
+      assert %Message{response: {:ok, :from_first}} =
+               Dispatcher.dispatch(_new_message(:first), timeout: 1_000)
+    end
+
+    test "a service registered by the caller is discovered by its next dispatch" do
+      misses =
+        1..200
+        |> Enum.count(fn attempt ->
+          service = :"registered_by_caller_#{attempt}"
+          services = %{public: %{service => NonOkService}, private: %{}}
+          Instrumenter.execute(:register_local_services, %{}, services)
+
+          :not_found ==
+            service
+            |> Message.new()
+            |> Dispatcher.discover_service()
+        end)
+
+      assert 0 == misses
+    end
+
+    test "a service whose last remote provider leaves is no longer discovered" do
+      registration = {:register_remote_services, {:ghost@nohost, [{:ghost_service, Ghost}]}}
+      send(ServiceRegistry, registration)
+
+      _state = :sys.get_state(ServiceRegistry)
+
+      on_exit(fn ->
+        send(ServiceRegistry, {:unregister_node_services, :ghost@nohost})
+        _state = :sys.get_state(ServiceRegistry)
+      end)
+
+      assert [{:ghost@nohost, Ghost}] == Dispatcher.discover_service(Message.new(:ghost_service))
+
+      send(ServiceRegistry, {:unregister_node_services, :ghost@nohost})
+      _state = :sys.get_state(ServiceRegistry)
+
+      assert :not_found == Dispatcher.discover_service(Message.new(:ghost_service))
+    end
+
+    test "a local provider wins over a remote one" do
+      send(ServiceRegistry, {:register_remote_services, {:ghost@nohost, [{:first, Ghost}]}})
+
+      on_exit(fn ->
+        send(ServiceRegistry, {:unregister_node_services, :ghost@nohost})
+        _state = :sys.get_state(ServiceRegistry)
+      end)
+
+      _state = :sys.get_state(ServiceRegistry)
+
+      assert [{:local, X3m.System.Test.Router}] ==
+               Dispatcher.discover_service(Message.new(:first))
+    end
+  end
+
+  describe "with the service registry stopped" do
+    setup do
+      _stop_service_registry()
+      on_exit(&_restart_service_registry/0)
+    end
+
+    test "dispatch returns service unavailable instead of exiting the caller" do
+      assert %Message{response: {:service_unavailable, :first}} =
+               Dispatcher.dispatch(_new_message(:first))
+    end
+
+    test "authorized? returns service unavailable instead of exiting the caller" do
+      assert :service_unavailable == Dispatcher.authorized?(_new_message(:first))
+    end
+
+    test "a lookup logs that the registry is not running" do
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          assert :not_found == ServiceRegistry.find_nodes_with_service(:first)
+        end)
+
+      assert log =~ "[Discovery] Service registry is not running, service first NOT found!"
+    end
+  end
+
+  # the supervisor is held so it cannot restart the registry while the test runs
+  defp _stop_service_registry do
+    registry = Process.whereis(ServiceRegistry)
+    ref = Process.monitor(registry)
+    :ok = :sys.suspend(X3m.System.Application)
+    Process.exit(registry, :kill)
+    assert_receive {:DOWN, ^ref, :process, ^registry, :killed}
+  end
+
+  # a killed registry leaves its telemetry handler attached, which would fail its restart
+  defp _restart_service_registry do
+    :ok = :telemetry.detach("x3m-system-services")
+    :ok = :sys.resume(X3m.System.Application)
+    # the supervisor handles the registry's EXIT before this call, so it is restarted
+    _children = Supervisor.which_children(X3m.System.Application)
+    :ok = X3m.System.Test.Router.register_services()
   end
 
   # a handler that outlives its test would emit telemetry into the next test's handlers
