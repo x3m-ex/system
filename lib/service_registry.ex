@@ -85,10 +85,12 @@ defmodule X3m.System.ServiceRegistry do
       |> Map.merge(local_services.private)
       |> Map.merge(local_services.public)
 
+    all_public_services = Map.merge(state.services.public, local_services.public)
+
     services = %{
       state.services
       | local: all_local_services,
-        public: local_services.public
+        public: all_public_services
     }
 
     :ok = _publish(services)

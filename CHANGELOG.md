@@ -1,10 +1,12 @@
-# Unreleased
+# 0.9.4
 
 - Service discovery no longer serializes through the registry process; with the registry
   not running, dispatch and `authorized?` report the service unavailable instead of
   exiting the caller
 - A router's `register_services/0` returns once its services are discoverable on
   its own node
+- Peers learn the public services of every router registered on a node, not only the
+  last one
 
 # 0.9.3
 

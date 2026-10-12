@@ -37,11 +37,17 @@ defmodule X3m.System.ClusterCase do
     {:ok, nodes} = LocalCluster.nodes(cluster)
 
     on_exit(fn ->
-      if Process.alive?(cluster), do: LocalCluster.stop(cluster)
-      # The async `:node_left` cleanup doesn't reliably run within the fast teardown between
-      # tests, so explicitly drop these nodes from this (manager) node's registry. This keeps
-      # tests independent — a later test never discovers a previous test's dead nodes.
+      # the app started before this node was distributed, so it never sees their nodedown
       Enum.each(nodes, fn node -> send(ServiceRegistry, {:unregister_node_services, node}) end)
+      # the unregisters are async; wait until the registry has applied them
+      _state = :sys.get_state(ServiceRegistry)
+
+      # linked to the exited test process, so the cluster is usually already gone
+      try do
+        LocalCluster.stop(cluster)
+      catch
+        :exit, _already_stopped -> :ok
+      end
     end)
 
     {cluster, nodes}
