@@ -24,6 +24,11 @@ defmodule X3m.System.Test.Account.EventStore do
   def fail(stream_name, result),
     do: Agent.update(__MODULE__, &put_in(&1, [:faults, stream_name], result))
 
+  @doc "Persists the next save_events/3 on `stream_name`, then returns `result` anyway (one-shot)."
+  @spec fail_after_persist(stream_name :: String.t(), result :: tuple()) :: :ok
+  def fail_after_persist(stream_name, result),
+    do: Agent.update(__MODULE__, &put_in(&1, [:faults, stream_name], {:after_persist, result}))
+
   @doc "Makes save_events/3 on `stream_name` sleep `ms` before returning."
   @spec delay(stream_name :: String.t(), ms :: non_neg_integer()) :: :ok
   def delay(stream_name, ms),
@@ -58,6 +63,11 @@ defmodule X3m.System.Test.Account.EventStore do
     |> case do
       nil ->
         _append(stream_name, message, events_metadata)
+
+      {:after_persist, result} ->
+        Agent.update(__MODULE__, &%{&1 | faults: Map.delete(&1.faults, stream_name)})
+        {:ok, _last_event_number} = _append(stream_name, message, events_metadata)
+        result
 
       result ->
         Agent.update(__MODULE__, &%{&1 | faults: Map.delete(&1.faults, stream_name)})
