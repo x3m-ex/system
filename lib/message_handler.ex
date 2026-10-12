@@ -192,6 +192,15 @@ defmodule X3m.System.MessageHandler do
             exit_process(id, {:creation_aborted, msg})
             %X3m.System.Message{message | response: {:ok, -1}}
 
+          {:noblock, %X3m.System.Message{dry_run: dry_run} = message, _state}
+          when dry_run != false ->
+            Logger.debug(fn ->
+              "Dry run of new aggregate rejected: #{inspect(message.response)}"
+            end)
+
+            exit_process(id, {:dry_run_rejected, message.response})
+            message
+
           {:noblock, %X3m.System.Message{} = message, _state} ->
             Logger.warning(fn ->
               "New aggregate creation failed: #{inspect(message.response)}"
@@ -352,7 +361,7 @@ defmodule X3m.System.MessageHandler do
 
           error ->
             Logger.error(fn -> "Error saving events #{inspect(error)}" end)
-            Process.exit(pid, :kill)
+            exit_process(message.aggregate_meta.id, {:save_failed, error})
             error
         end
       end
@@ -364,9 +373,8 @@ defmodule X3m.System.MessageHandler do
 
         Logger.info(fn -> "Successfull dry_run of events." end)
 
-        # If process was spawned for new aggregate, kill it
         if last_event_number == -1,
-          do: Process.exit(pid, :kill)
+          do: exit_process(message.aggregate_meta.id, :dry_run_finished)
 
         {:ok, message, last_event_number}
       end
@@ -382,9 +390,8 @@ defmodule X3m.System.MessageHandler do
 
         Logger.info(fn -> "Successfull verbose dry_run of events." end)
 
-        # If process was spawned for new aggregate, kill it
         if last_event_number == -1,
-          do: Process.exit(pid, :kill)
+          do: exit_process(message.aggregate_meta.id, :dry_run_finished)
 
         {:ok, message, last_event_number}
       end

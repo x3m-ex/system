@@ -11,6 +11,7 @@ defmodule X3m.System.Aggregate.RuntimeTest do
   }
 
   alias X3m.System.Test.Account.TimeoutMessageHandler
+  alias X3m.System.Test.Account.AbandoningLoadHandler
   alias X3m.System.Test.Account.{SnapshotMessageHandler, StateStore}
 
   alias X3m.System.Test.Account.Events
@@ -104,7 +105,6 @@ defmodule X3m.System.Aggregate.RuntimeTest do
         |> MessageHandler.open_account()
 
       assert {:error, :wrong_expected_version, 0} = replied.response
-      Process.sleep(50)
       assert :error == _registry_get(account_id)
     end
 
@@ -242,6 +242,160 @@ defmodule X3m.System.Aggregate.RuntimeTest do
     end
   end
 
+  describe "dry run on a new aggregate" do
+    test "a valid dry run tears its aggregate down without a warning" do
+      account_id = _id()
+      aggregates_before = _aggregate_pids()
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          {:reply, replied} =
+            :open_account
+            |> X3m.System.Message.new(
+              raw_request: %{"id" => account_id, "owner_id" => "u1"},
+              dry_run: true
+            )
+            |> MessageHandler.open_account()
+
+          assert {:ok, -1} == replied.response
+          assert :error == _registry_get(account_id)
+        end)
+
+      assert aggregates_before == _aggregate_pids()
+      assert [] == EventStore.dump("accounts-" <> account_id)
+      refute log =~ "[warning]"
+    end
+
+    test "a valid verbose dry run tears its aggregate down without a warning" do
+      account_id = _id()
+      aggregates_before = _aggregate_pids()
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          {:reply, replied} =
+            :open_account
+            |> X3m.System.Message.new(
+              raw_request: %{"id" => account_id, "owner_id" => "u1"},
+              dry_run: :verbose
+            )
+            |> MessageHandler.open_account()
+
+          assert {:ok, [%Events.Opened{owner_id: "u1"}], -1} = replied.response
+          assert :error == _registry_get(account_id)
+        end)
+
+      assert aggregates_before == _aggregate_pids()
+      refute log =~ "[warning]"
+    end
+
+    test "a rejected dry run tears its aggregate down without a warning" do
+      account_id = _id()
+      aggregates_before = _aggregate_pids()
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          {:reply, replied} =
+            :open_account
+            |> X3m.System.Message.new(raw_request: %{"id" => account_id}, dry_run: true)
+            |> MessageHandler.open_account()
+
+          assert {:validation_error,
+                  %Ecto.Changeset{errors: [owner_id: {"can't be blank", [validation: :required]}]}} =
+                   replied.response
+
+          assert :error == _registry_get(account_id)
+        end)
+
+      assert aggregates_before == _aggregate_pids()
+      refute log =~ "[warning]"
+    end
+
+    for dry_run <- [true, :verbose] do
+      test "repeated #{inspect(dry_run)} dry runs keep the aggregate supervisor and its children" do
+        sup_before = _aggregate_sup()
+        aggregates_before = _aggregate_pids()
+
+        _tear_down_past_restart_intensity(fn ->
+          account_id = _id()
+
+          {:reply, _replied} =
+            :open_account
+            |> X3m.System.Message.new(
+              raw_request: %{"id" => account_id, "owner_id" => "u1"},
+              dry_run: unquote(dry_run)
+            )
+            |> MessageHandler.open_account()
+
+          assert :error == _registry_get(account_id)
+        end)
+
+        assert sup_before == _aggregate_sup()
+        assert aggregates_before == _aggregate_pids()
+      end
+    end
+
+    for {kind, raw_request, dry_run} <- [
+          {"valid", %{"owner_id" => "u1"}, true},
+          {"valid verbose", %{"owner_id" => "u1"}, :verbose},
+          {"rejected", %{}, true}
+        ] do
+      test "a real creation right after a #{kind} dry run on the same id succeeds" do
+        for _run <- 1..20 do
+          account_id = _id()
+
+          {:reply, _dry_run} =
+            :open_account
+            |> X3m.System.Message.new(
+              raw_request: Map.put(unquote(Macro.escape(raw_request)), "id", account_id),
+              dry_run: unquote(dry_run)
+            )
+            |> MessageHandler.open_account()
+
+          {:reply, created} =
+            :open_account
+            |> TestSupport.command_message(%{"id" => account_id, "owner_id" => "u1"})
+            |> MessageHandler.open_account()
+
+          assert {:created, account_id, 0} == created.response
+        end
+      end
+    end
+
+    test "a rejected real creation still logs a warning" do
+      account_id = _id()
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          {:reply, _replied} =
+            :open_account
+            |> TestSupport.command_message(%{"id" => account_id})
+            |> MessageHandler.open_account()
+
+          assert :error == _registry_get(account_id)
+        end)
+
+      assert log =~ "[warning] New aggregate creation failed"
+    end
+  end
+
+  describe "when_pid_is_not_registered/3 override" do
+    test "can tear down the aggregate it spawned without stopping the pid facade" do
+      account_id = _id()
+      facade_before = _pid_facade()
+      aggregates_before = _aggregate_pids()
+
+      {:reply, replied} =
+        :deposit
+        |> TestSupport.command_message(%{"id" => account_id, "amount" => 1})
+        |> AbandoningLoadHandler.deposit()
+
+      assert {:error, :not_found} == replied.response
+      assert facade_before == _pid_facade()
+      assert :error == _registry_get(account_id)
+      assert aggregates_before == _aggregate_pids()
+    end
+  end
+
   describe "save_events/1 override" do
     test "reacts to produced events and filters which ones persist" do
       # registered name auto-clears when this (async: false) test process exits
@@ -288,9 +442,72 @@ defmodule X3m.System.Aggregate.RuntimeTest do
         |> MessageHandler.open_account()
 
       assert {:error, :boom} == replied.response
-
-      Process.sleep(50)
       assert :error == _registry_get(account_id)
+    end
+
+    test "a save_events error ends the aggregate before the caller gets the error, so a retry replays persisted events" do
+      account_id = _id()
+
+      {:reply, _opened} =
+        :open_account
+        |> TestSupport.command_message(%{"id" => account_id, "owner_id" => "u1"})
+        |> MessageHandler.open_account()
+
+      {:ok, stale_pid} = _registry_get(account_id)
+      EventStore.fail_after_persist("accounts-" <> account_id, {:error, :boom})
+
+      {:reply, failed} =
+        :deposit
+        |> TestSupport.command_message(%{"id" => account_id, "amount" => 100})
+        |> MessageHandler.deposit()
+
+      assert {:error, :boom} == failed.response
+      refute Process.alive?(stale_pid)
+
+      assert :error == _registry_get(account_id)
+
+      {:reply, retried} =
+        :withdraw
+        |> TestSupport.command_message(%{"id" => account_id, "amount" => 100})
+        |> MessageHandler.withdraw()
+
+      assert {:ok, 2} == retried.response
+      assert {:ok, fresh_pid} = _registry_get(account_id)
+      refute stale_pid == fresh_pid
+    end
+
+    test "a save_events error leaves no aggregate process behind" do
+      account_id = _id()
+      EventStore.fail("accounts-" <> account_id, {:error, :boom})
+      aggregates_before = _aggregate_pids()
+
+      {:reply, _replied} =
+        :open_account
+        |> TestSupport.command_message(%{"id" => account_id, "owner_id" => "u1"})
+        |> MessageHandler.open_account()
+
+      assert :error == _registry_get(account_id)
+      assert aggregates_before == _aggregate_pids()
+    end
+
+    test "repeated save_events errors keep the aggregate supervisor and its children" do
+      sup_before = _aggregate_sup()
+      aggregates_before = _aggregate_pids()
+
+      _tear_down_past_restart_intensity(fn ->
+        account_id = _id()
+        EventStore.fail("accounts-" <> account_id, {:error, :boom})
+
+        {:reply, _replied} =
+          :open_account
+          |> TestSupport.command_message(%{"id" => account_id, "owner_id" => "u1"})
+          |> MessageHandler.open_account()
+
+        assert :error == _registry_get(account_id)
+      end)
+
+      assert sup_before == _aggregate_sup()
+      assert aggregates_before == _aggregate_pids()
     end
   end
 
@@ -432,6 +649,35 @@ defmodule X3m.System.Aggregate.RuntimeTest do
       # the timed-out command crashed the caller (client-visible timeout) — intended behavior
       assert true == crashed
     end
+
+    test "repeated commit timeouts keep the aggregate supervisor and its children" do
+      sup_before = _aggregate_sup()
+      aggregates_before = _aggregate_pids()
+
+      _tear_down_past_restart_intensity(fn ->
+        account_id = _id()
+        :ok = _open_with_slow_saves(account_id)
+        # the aggregate stops at its commit timeout; the caller's own 1s commit wait is irrelevant
+        spawn(fn -> _time_out_deposit(account_id) end)
+        :ok = _await_unregistered(account_id)
+      end)
+
+      assert sup_before == _aggregate_sup()
+      assert aggregates_before == _aggregate_pids()
+    end
+
+    test "a commit timeout is logged as a warning" do
+      account_id = _id()
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          :ok = _open_with_slow_saves(account_id)
+          :ok = _time_out_deposit(account_id)
+          :ok = _await_unregistered(account_id)
+        end)
+
+      assert log =~ "[warning] Commit timed out after 50ms"
+    end
   end
 
   describe "non-event-sourced (standard save/load) lifecycle" do
@@ -518,15 +764,85 @@ defmodule X3m.System.Aggregate.RuntimeTest do
     X3m.System.Test.Account.Aggregate
     |> X3m.System.AggregatePidFacade.name()
     |> X3m.System.AggregatePidFacade.exit_process(account_id, :unload_for_test)
-
-    Process.sleep(50)
-    :ok
   end
 
   defp _registry_get(account_id) do
     X3m.System.Test.Account.Aggregate
     |> X3m.System.AggregateRegistry.name()
     |> X3m.System.AggregateRegistry.get(account_id)
+  end
+
+  defp _await_unregistered(account_id, attempts \\ 100)
+
+  defp _await_unregistered(_account_id, 0),
+    do: :still_registered
+
+  defp _await_unregistered(account_id, attempts) do
+    account_id
+    |> _registry_get()
+    |> case do
+      :error ->
+        :ok
+
+      {:ok, _pid} ->
+        Process.sleep(10)
+        _await_unregistered(account_id, attempts - 1)
+    end
+  end
+
+  defp _open_with_slow_saves(account_id) do
+    {:reply, _opened} =
+      :open_account
+      |> TestSupport.command_message(%{"id" => account_id, "owner_id" => "u1"})
+      |> TimeoutMessageHandler.open_account()
+
+    # save_events slower than the 50ms commit_timeout
+    EventStore.delay("timeout-accounts-" <> account_id, 200)
+  end
+
+  defp _time_out_deposit(account_id) do
+    try do
+      :deposit
+      |> TestSupport.command_message(%{"id" => account_id, "amount" => 100})
+      |> TimeoutMessageHandler.deposit()
+    rescue
+      MatchError -> :ok
+    catch
+      :exit, _reason -> :ok
+    end
+  end
+
+  # one more teardown than the aggregate supervisor tolerates restarts for, inside its window
+  defp _tear_down_past_restart_intensity(tear_down) do
+    %DynamicSupervisor{max_restarts: max_restarts, max_seconds: max_seconds} =
+      :sys.get_state(_aggregate_sup())
+
+    started_at = System.monotonic_time(:millisecond)
+    Enum.each(0..max_restarts, fn _run -> tear_down.() end)
+    elapsed_ms = System.monotonic_time(:millisecond) - started_at
+
+    assert elapsed_ms < max_seconds * 1_000,
+           "#{max_restarts + 1} teardowns took #{elapsed_ms}ms, outside the #{max_seconds}s restart window"
+  end
+
+  defp _pid_facade() do
+    X3m.System.Test.Account.Aggregate
+    |> X3m.System.AggregatePidFacade.name()
+    |> Process.whereis()
+  end
+
+  defp _aggregate_sup() do
+    X3m.System.Test.Account.Aggregate
+    |> X3m.System.AggregateSup.name()
+    |> Process.whereis()
+  end
+
+  defp _aggregate_pids() do
+    X3m.System.Test.Account.Aggregate
+    |> X3m.System.AggregateSup.name()
+    |> DynamicSupervisor.which_children()
+    |> Enum.map(fn {_id, pid, _type, _modules} -> pid end)
+    |> Enum.sort()
   end
 
   defp _id(), do: UUID.uuid4()

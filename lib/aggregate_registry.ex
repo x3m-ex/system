@@ -29,7 +29,7 @@ defmodule X3m.System.AggregateRegistry do
   Returns `{:ok, pid}` if the one exists, `:error` otherwise.
   """
   def get(server, key),
-    do: server |> pid_table |> _get(key)
+    do: server |> pid_table |> _get_pid(key)
 
   @doc """
   Ensures there is a `pid` associated with `key` in `server`.
@@ -38,6 +38,13 @@ defmodule X3m.System.AggregateRegistry do
   """
   def register(server, key, pid),
     do: GenServer.call(server, {:register, key, pid})
+
+  @doc """
+  Drops `key` from `server` at once, so it no longer resolves.
+  """
+  @spec unregister(server :: atom(), key :: term()) :: :ok
+  def unregister(server, key),
+    do: GenServer.call(server, {:unregister, key})
 
   ## Server Callbacks
 
@@ -55,9 +62,16 @@ defmodule X3m.System.AggregateRegistry do
 
   ## Private functions
 
-  defp _get(table, key) do
-    case :ets.lookup(table, key) do
-      [{^key, val}] -> {:ok, val}
+  defp _get_pid(pid_table, key) do
+    case :ets.lookup(pid_table, key) do
+      [{^key, pid, _ref}] -> {:ok, pid}
+      [] -> :error
+    end
+  end
+
+  defp _get_key(ref_table, ref) do
+    case :ets.lookup(ref_table, ref) do
+      [{^ref, key}] -> {:ok, key}
       [] -> :error
     end
   end
@@ -68,7 +82,7 @@ defmodule X3m.System.AggregateRegistry do
   def handle_call({:has_key?, key}, _from, state) do
     result =
       state.pid_table
-      |> _get(key)
+      |> _get_pid(key)
       |> case do
         {:ok, _pid} -> true
         :error -> false
@@ -78,17 +92,17 @@ defmodule X3m.System.AggregateRegistry do
   end
 
   def handle_call({:get, key}, _from, state),
-    do: {:reply, _get(state.pid_table, key), state}
+    do: {:reply, _get_pid(state.pid_table, key), state}
 
   def handle_call({:register, key, pid}, _from, state) do
     result =
-      case _get(state.pid_table, key) do
+      case _get_pid(state.pid_table, key) do
         {:ok, pid} ->
           {:error, :key_already_registered, pid}
 
         :error ->
           ref = Process.monitor(pid)
-          true = :ets.insert(state.pid_table, {key, pid})
+          true = :ets.insert(state.pid_table, {key, pid, ref})
           true = :ets.insert(state.ref_table, {ref, key})
           :ok
       end
@@ -96,16 +110,41 @@ defmodule X3m.System.AggregateRegistry do
     {:reply, result, state}
   end
 
-  def handle_info({:DOWN, ref, :process, pid, reason}, state) do
-    case _get(state.ref_table, ref) do
-      {:ok, key} ->
-        Logger.warning("Process #{inspect(pid)} went down: #{inspect(reason)}")
+  def handle_call({:unregister, key}, _from, state) do
+    case :ets.lookup(state.pid_table, key) do
+      [{^key, _pid, ref}] ->
+        Process.demonitor(ref, [:flush])
         :ets.delete(state.ref_table, ref)
         :ets.delete(state.pid_table, key)
+
+      [] ->
+        :ok
+    end
+
+    {:reply, :ok, state}
+  end
+
+  def handle_info({:DOWN, ref, :process, pid, reason}, state) do
+    case _get_key(state.ref_table, ref) do
+      {:ok, key} ->
+        reason
+        |> _down_log_level()
+        |> Logger.log(fn -> "Process #{inspect(pid)} went down: #{inspect(reason)}" end)
+
+        :ets.delete(state.ref_table, ref)
+        :ets.delete_object(state.pid_table, {key, pid, ref})
+
+      :error ->
+        :ok
     end
 
     {:noreply, state}
   end
 
   def handle_info(_msg, state), do: {:noreply, state}
+
+  defp _down_log_level(:normal), do: :debug
+  defp _down_log_level(:shutdown), do: :debug
+  defp _down_log_level({:shutdown, _reason}), do: :debug
+  defp _down_log_level(_reason), do: :warning
 end

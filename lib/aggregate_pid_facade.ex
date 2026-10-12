@@ -8,6 +8,8 @@ defmodule X3m.System.AggregatePidFacade do
   alias X3m.System.AggregateSup
   alias X3m.System.AggregateRegistry, as: Registry
 
+  @state_key {__MODULE__, :state}
+
   def name(aggregate_mod),
     do: Module.concat(aggregate_mod, PidFacade)
 
@@ -25,8 +27,20 @@ defmodule X3m.System.AggregatePidFacade do
   def spawn_new(server, key, opts \\ []),
     do: GenServer.call(server, {:spawn_new, key, opts})
 
-  def exit_process(server, key, reason),
-    do: GenServer.cast(server, {:exit_process, key, reason})
+  # inline inside the facade itself, e.g. from a when_pid_is_not_registered/3 override
+  def exit_process(server, key, reason) do
+    server
+    |> GenServer.whereis()
+    |> case do
+      facade when facade == self() ->
+        @state_key
+        |> Process.get()
+        |> _exit_process(key, reason)
+
+      _facade ->
+        GenServer.call(server, {:exit_process, key, reason})
+    end
+  end
 
   @impl GenServer
   def init(aggregate_mod) do
@@ -35,6 +49,9 @@ defmodule X3m.System.AggregatePidFacade do
       aggregate_sup: AggregateSup.name(aggregate_mod),
       aggregate_mod: aggregate_mod
     }
+
+    # read by exit_process/3 inside the facade; keep in sync if a callback ever changes state
+    Process.put(@state_key, state)
 
     {:ok, state}
   end
@@ -48,19 +65,8 @@ defmodule X3m.System.AggregatePidFacade do
   def handle_call({:get_pid, key, when_not_registered}, _from, state),
     do: {:reply, _get_pid(key, state, when_not_registered, []), state}
 
-  @impl GenServer
-  def handle_cast({:exit_process, key, reason}, state) do
-    case Registry.get(state.registry, key) do
-      {:ok, pid} ->
-        Logger.debug("Killing process #{inspect(pid)}: #{inspect(reason)}")
-        AggregateSup.terminate_child(state.aggregate_sup, pid)
-
-      _ ->
-        :ok
-    end
-
-    {:noreply, state}
-  end
+  def handle_call({:exit_process, key, reason}, _from, state),
+    do: {:reply, _exit_process(state, key, reason), state}
 
   @impl GenServer
   def handle_info({:exit_process, pid, reason}, state) do
@@ -68,6 +74,20 @@ defmodule X3m.System.AggregatePidFacade do
     AggregateSup.terminate_child(state.aggregate_sup, pid)
 
     {:noreply, state}
+  end
+
+  # unregister first so the id never resolves to a terminating pid
+  defp _exit_process(state, key, reason) do
+    case Registry.get(state.registry, key) do
+      {:ok, pid} ->
+        Logger.debug("Killing process #{inspect(pid)}: #{inspect(reason)}")
+        :ok = Registry.unregister(state.registry, key)
+        AggregateSup.terminate_child(state.aggregate_sup, pid)
+        :ok
+
+      :error ->
+        :ok
+    end
   end
 
   defp _get_pid(key, state, when_not_registered, opts) do

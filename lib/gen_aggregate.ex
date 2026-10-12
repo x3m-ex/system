@@ -5,6 +5,7 @@ defmodule X3m.System.GenAggregate do
              block/commit transaction protocol.
              """
   use GenServer, restart: :transient
+  require Logger
 
   alias X3m.System.Message
   @behaviour X3m.System.GenAggregateMod
@@ -160,7 +161,11 @@ defmodule X3m.System.GenAggregate do
           %{aggregate: state.aggregate_mod, message: cmd}
         )
 
-        {:stop, {:commit_timeout, commit_timeout}, state}
+        Logger.warning(fn ->
+          "Commit timed out after #{commit_timeout}ms, stopping aggregate: #{inspect(cmd)}"
+        end)
+
+        {:stop, {:shutdown, {:commit_timeout, commit_timeout}}, state}
     end
   end
 end

@@ -1,3 +1,16 @@
+# Unreleased
+
+- Fix repeated dry runs on new aggregates, failed event saves or commit timeouts crashing the
+  aggregate supervisor and taking every live aggregate down; they also no longer leave orphaned
+  processes. A commit timeout logs an explicit warning instead of a GenServer crash report
+- A dry run on a new aggregate, valid or rejected, no longer logs warnings; the aggregate
+  registry logs intentional aggregate shutdowns (`:normal`, `:shutdown`, `{:shutdown, _}`) at
+  debug instead of warning
+- When a dry run on a new aggregate or a failed event save returns, its aggregate is already
+  gone, so an immediate real command on the same id gets a fresh aggregate
+- In a message handler, `exit_process/2` (and the `unload_aggregate_on` `:unload` rule) returns
+  once the aggregate is gone
+
 # 0.9.4
 
 - Service discovery no longer serializes through the registry process; with the registry
