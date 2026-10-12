@@ -1,3 +1,8 @@
+# Unreleased
+
+- `X3m.System.Aggregate.initial_state/1` results pass dialyzer when given to a generated
+  command function; build a `State` with it rather than a literal `%State{}`
+
 # 0.9.5
 
 - Fix repeated dry runs on new aggregates, failed event saves or commit timeouts crashing the
