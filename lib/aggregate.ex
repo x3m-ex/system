@@ -60,8 +60,17 @@ defmodule X3m.System.Aggregate do
     You meet it mostly in tests — `X3m.System.Aggregate.initial_state/1` returns it and
     `apply_events/3` produces it — where you read `client_state` to assert on your
     aggregate's state.
+
+    Build it with `X3m.System.Aggregate.initial_state/1` (and `apply_events/3` on its
+    result), not a literal `%State{}`: its compile-time default fails dialyzer
+    (`call_without_opaque`) when passed to a command function.
     """
-    @type t :: %__MODULE__{version: integer, client_state: any}
+    @type processed_messages :: MapSet.t(message_id :: term())
+    @type t :: %__MODULE__{
+            version: integer,
+            client_state: any,
+            processed_messages: processed_messages()
+          }
     defstruct version: -1, client_state: nil, processed_messages: MapSet.new()
   end
 
@@ -90,8 +99,14 @@ defmodule X3m.System.Aggregate do
   you pass to a command function.
   """
   @spec initial_state(aggregate_mod :: module()) :: State.t()
-  def initial_state(aggregate_mod),
-    do: %State{client_state: apply(aggregate_mod, :initial_state, [])}
+  def initial_state(aggregate_mod) do
+    client_state = apply(aggregate_mod, :initial_state, [])
+    %State{client_state: client_state, processed_messages: _new_processed_messages([])}
+  end
+
+  # a literal empty MapSet (struct default, MapSet.new/0) fails dialyzer's :sets.set opaque check
+  @spec _new_processed_messages(message_ids :: [term()]) :: State.processed_messages()
+  defp _new_processed_messages(message_ids), do: MapSet.new(message_ids)
 
   @doc """
   Defines a command handler `msg_name/2` from a single `fun`.
