@@ -1,4 +1,4 @@
-# Unreleased
+# 0.9.5
 
 - Fix repeated dry runs on new aggregates, failed event saves or commit timeouts crashing the
   aggregate supervisor and taking every live aggregate down; they also no longer leave orphaned
