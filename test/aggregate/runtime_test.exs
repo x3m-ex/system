@@ -657,8 +657,7 @@ defmodule X3m.System.Aggregate.RuntimeTest do
       _tear_down_past_restart_intensity(fn ->
         account_id = _id()
         :ok = _open_with_slow_saves(account_id)
-        # the aggregate stops at its commit timeout; the caller's own 1s commit wait is irrelevant
-        spawn(fn -> _time_out_deposit(account_id) end)
+        :ok = _time_out_deposit(account_id)
         :ok = _await_unregistered(account_id)
       end)
 

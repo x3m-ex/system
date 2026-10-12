@@ -10,6 +10,8 @@
   gone, so an immediate real command on the same id gets a fresh aggregate
 - In a message handler, `exit_process/2` (and the `unload_aggregate_on` `:unload` rule) returns
   once the aggregate is gone
+- A command whose aggregate dies before committing (e.g. on a commit timeout) fails at once
+  instead of after a further second
 
 # 0.9.4
 

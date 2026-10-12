@@ -16,37 +16,53 @@ defmodule X3m.System.GenAggregate do
     defstruct @enforce_keys
   end
 
+  @spec start_link(aggregate_mod :: module(), opts :: Keyword.t()) :: GenServer.on_start()
   def start_link(aggregate_mod, opts \\ []),
     do: GenServer.start_link(__MODULE__, {aggregate_mod, opts}, opts)
 
   @impl X3m.System.GenAggregateMod
-  @spec apply_event_stream(pid, function) :: :ok
+  @spec apply_event_stream(aggregate :: pid(), event_stream :: Enumerable.t()) :: :ok
   def apply_event_stream(pid, event_stream),
     do: GenServer.call(pid, {:apply_event_stream, event_stream})
 
   @impl X3m.System.GenAggregateMod
+  @spec handle_msg(aggregate :: pid(), cmd :: atom(), message :: Message.t(), opts :: Keyword.t()) ::
+          {:block, message :: Message.t(), transaction_id :: String.t()}
+          | {:noblock, message :: Message.t(), aggregate_state :: X3m.System.Aggregate.State.t()}
   def handle_msg(pid, cmd, %Message{} = message, opts) do
     commit_timeout = Keyword.fetch!(opts, :commit_timeout)
     GenServer.call(pid, {:handle_msg, cmd, message, commit_timeout}, commit_timeout)
   end
 
   @impl X3m.System.GenAggregateMod
-  @spec commit(pid, String.t(), Message.t(), integer) ::
-          {:ok, X3m.System.Aggregate.State.t()} | :transaction_timeout
+  @spec commit(
+          aggregate :: pid(),
+          transaction_id :: String.t(),
+          message :: Message.t(),
+          last_version :: integer()
+        ) :: {:ok, aggregate_state :: X3m.System.Aggregate.State.t()} | :transaction_timeout
   def commit(pid, transaction_id, %Message{} = message, last_version) do
+    ref = Process.monitor(pid)
     send(pid, {:commit, transaction_id, message, last_version, self()})
 
     receive do
-      {:transaction_commited, ^transaction_id, aggregate_state} -> {:ok, aggregate_state}
+      {:transaction_commited, ^transaction_id, aggregate_state} ->
+        Process.demonitor(ref, [:flush])
+        {:ok, aggregate_state}
+
+      {:DOWN, ^ref, :process, ^pid, _reason} ->
+        :transaction_timeout
     after
       # Commit is applying events only. It should be fast!
       # This timeout is not the same aggregate is waiting to receive :commit message!
-      1_000 -> :transaction_timeout
+      1_000 ->
+        Process.demonitor(ref, [:flush])
+        :transaction_timeout
     end
   end
 
   @impl X3m.System.GenAggregateMod
-  @spec set_state(pid, loaded_state :: term(), version :: integer()) :: :ok
+  @spec set_state(aggregate :: pid(), loaded_state :: term(), version :: integer()) :: :ok
   def set_state(pid, loaded_state, version),
     do: GenServer.call(pid, {:set_state, loaded_state, version})
 
