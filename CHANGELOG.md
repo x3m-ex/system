@@ -1,4 +1,4 @@
-# Unreleased
+# 0.9.4
 
 - Service discovery no longer serializes through the registry process; with the registry
   not running, dispatch and `authorized?` report the service unavailable instead of
