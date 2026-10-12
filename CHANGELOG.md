@@ -1,4 +1,4 @@
-# Unreleased
+# 0.9.6
 
 - `X3m.System.Aggregate.initial_state/1` results pass dialyzer when given to a generated
   command function; build a `State` with it rather than a literal `%State{}`
