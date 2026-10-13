@@ -1,4 +1,4 @@
-# Unreleased
+# 0.9.7
 
 - A crashed aggregate is no longer restarted as an unregistered, empty process; the next command
   for its id rehydrates it
