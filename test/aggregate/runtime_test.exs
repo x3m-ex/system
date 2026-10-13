@@ -133,7 +133,7 @@ defmodule X3m.System.Aggregate.RuntimeTest do
         |> TestSupport.command_message(%{"id" => account_id, "owner_id" => "u1"})
         |> MessageHandler.open_account()
 
-      assert {:error, :wrong_expected_version, 0} = replied.response
+      assert {:error, :wrong_expected_version, -1} = replied.response
       assert :error == _registry_get(account_id)
     end
 

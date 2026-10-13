@@ -374,7 +374,7 @@ defmodule MyApp.Accounts.InMemoryEventStore do
       # optimistic concurrency: the expected version is the aggregate's loaded version
       # (-1 for a new aggregate), so a "create" against an existing stream is rejected.
       if message.aggregate_meta.version != current do
-        {{:error, :wrong_expected_version, current}, streams}
+        {{:error, :wrong_expected_version, message.aggregate_meta.version}, streams}
       else
         # stamp message.id into metadata so idempotency survives a rehydrate
         meta = Map.put(metadata, :message_id, message.id)

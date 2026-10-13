@@ -8,7 +8,8 @@ defmodule Banking.Api.MixProject do
       elixir: "~> 1.17",
       start_permanent: Mix.env() == :prod,
       deps: _deps(),
-      elixirc_paths: ["lib"],
+      elixirc_paths: _elixirc_paths(Mix.env()),
+      aliases: _aliases(),
       dialyzer: [plt_add_deps: :apps_direct]
     ]
   end
@@ -23,6 +24,13 @@ defmodule Banking.Api.MixProject do
       mod: {Banking.Api.Application, []}
     ]
   end
+
+  defp _elixirc_paths(:test), do: ["lib", "test/support"]
+  defp _elixirc_paths(_), do: ["lib"]
+
+  # tests drive ServiceInvoker directly, so the HTTP listener is not started
+  defp _aliases,
+    do: [test: "test --no-start"]
 
   defp _deps do
     [

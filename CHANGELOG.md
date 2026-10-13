@@ -14,6 +14,8 @@
   `{:error, exception}` when it raises
 - Scheduler: alarms are loaded `2 * in_memory_interval/0` ahead of now on every tick, instead of
   a window that grew with each tick
+- `X3m.System.Response` documents the `{:error, :wrong_expected_version, version}` and
+  `{:error, :key_already_registered, pid}` responses aggregate-backed commands can return
 
 # 0.9.6
 
