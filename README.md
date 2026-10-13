@@ -117,6 +117,16 @@ The [Banking example](https://github.com/x3m-ex/system/tree/main/examples/bank) 
 full CQRS/ES flow — HTTP API, command aggregates, event store, listener-driven read
 model, and cross-node dispatch. See its README for setup and curl walkthrough.
 
+## Releasing
+
+1. On a branch, bump `@version` in `mix.exs` and the README install snippet, and rename the
+   CHANGELOG `# Unreleased` heading to the new version; merge the PR into `main`.
+2. Publish a GitHub Release whose new tag is the bare version (`X.Y.Z`, no `v`) targeting `main`,
+   e.g. `gh release create X.Y.Z --target main`.
+3. The release workflow checks that the tag matches `mix.exs` and is on `main`, runs `mix bless`
+   and publishes the package and docs to hex. It needs the repository secret `HEX_API_KEY`, a hex
+   key scoped to the `x3m_system` package. Prereleases are not published until promoted.
+
 ## License
 
 Released under the MIT License. See the [LICENSE](https://github.com/x3m-ex/system/blob/main/LICENSE) file.
