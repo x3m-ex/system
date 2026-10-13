@@ -1,4 +1,4 @@
-# Unreleased
+# 0.10.0
 
 - Generated ids (aggregate ids, transaction ids) are now UUIDv7, so they are time-ordered, and
   the `elixir_uuid` dependency is no longer needed: an app without it no longer crashes on an
