@@ -10,6 +10,9 @@ defmodule X3m.System.ServiceRegistry do
   alias X3m.System.ServiceRegistry.State
 
   @table Module.concat(__MODULE__, Services)
+  @handler_id "x3m-system-services"
+  # outlives a registry restart, as routers register their services only once, when they start
+  @local_services_key {__MODULE__, :local_services}
 
   def start_link(opts \\ []),
     do: GenServer.start_link(__MODULE__, :ok, [{:name, __MODULE__} | opts])
@@ -66,19 +69,25 @@ defmodule X3m.System.ServiceRegistry do
     Process.send_after(self(), {:exchange_services, interval}, interval)
     _table = :ets.new(@table, [:named_table, read_concurrency: true])
 
-    {:ok, %State{services: %State.Services{local: %{}, public: %{}, remote: %{}}}}
+    %{local: local, public: public} =
+      :persistent_term.get(@local_services_key, %{local: %{}, public: %{}})
+
+    services = %State.Services{local: local, public: public, remote: %{}}
+    :ok = _publish(services)
+
+    # peers that connected before this registry started never saw it join
+    _broadcast({:register_remote_services, {Node.self(), public}})
+    _broadcast({:introduce_local_services, Node.self()})
+
+    {:ok, %State{services: services}}
   end
 
   @impl GenServer
   def handle_call({:register_local_services, %{} = local_services}, _from, %State{} = state) do
     Logger.debug(fn -> "[Discovery] Registered local services #{inspect(local_services)}" end)
 
-    request = {:register_remote_services, {Node.self(), local_services.public}}
-
     Logger.debug(fn -> "[Discovery] Notifying cluster members of new local services" end)
-
-    Node.list()
-    |> Enum.each(fn node -> send({__MODULE__, node}, request) end)
+    _broadcast({:register_remote_services, {Node.self(), local_services.public}})
 
     all_local_services =
       state.services.local
@@ -93,6 +102,12 @@ defmodule X3m.System.ServiceRegistry do
         public: all_public_services
     }
 
+    :ok =
+      :persistent_term.put(@local_services_key, %{
+        local: all_local_services,
+        public: all_public_services
+      })
+
     :ok = _publish(services)
     {:reply, :ok, %{state | services: services}}
   end
@@ -100,11 +115,7 @@ defmodule X3m.System.ServiceRegistry do
   @impl GenServer
   def handle_info({:exchange_services, interval}, %State{} = state) do
     # Logger.debug(fn -> "[Discovery] Exchanging services with cluster members..." end)
-    request = {:register_remote_services, {Node.self(), state.services.public}}
-
-    Node.list()
-    |> Enum.each(fn node -> send({__MODULE__, node}, request) end)
-
+    _broadcast({:register_remote_services, {Node.self(), state.services.public}})
     Process.send_after(self(), {:exchange_services, interval}, interval)
 
     {:noreply, state}
@@ -139,21 +150,32 @@ defmodule X3m.System.ServiceRegistry do
   @impl GenServer
   def terminate(reason, %State{}) do
     Logger.info(fn -> "Terminating ServiceRegistry because of: #{inspect(reason)}" end)
-    request = {:unregister_node_services, Node.self()}
-
-    Node.list()
-    |> Enum.each(fn node -> send({__MODULE__, node}, request) end)
-
-    Process.sleep(10_000)
-    :ok
+    _detached = :telemetry.detach(@handler_id)
+    _withdraw_services(reason)
   end
 
-  defp _subscribe_for_service_events(config \\ nil) do
+  # only a stopping node withdraws its services; a crashed registry restarts and re-announces them
+  defp _withdraw_services(reason) when reason in [:normal, :shutdown],
+    do: _broadcast({:unregister_node_services, Node.self()})
+
+  defp _withdraw_services({:shutdown, _reason}),
+    do: _broadcast({:unregister_node_services, Node.self()})
+
+  defp _withdraw_services(_crash_reason), do: :ok
+
+  defp _broadcast(request) do
+    Node.list()
+    |> Enum.each(fn node -> send({__MODULE__, node}, request) end)
+  end
+
+  defp _subscribe_for_service_events do
     events = [
       [:x3m, :system, :register_local_services]
     ]
 
-    :telemetry.attach_many("x3m-system-services", events, &__MODULE__.handle_event/4, config)
+    # a killed registry never ran terminate/2, so its handler may still be attached
+    _detached = :telemetry.detach(@handler_id)
+    :telemetry.attach_many(@handler_id, events, &__MODULE__.handle_event/4, nil)
   end
 
   # a local provider wins over remote ones, as the dispatcher invokes it directly

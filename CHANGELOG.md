@@ -16,6 +16,10 @@
   a window that grew with each tick
 - `X3m.System.Response` documents the `{:error, :wrong_expected_version, version}` and
   `{:error, :key_already_registered, pid}` responses aggregate-backed commands can return
+- A crashed service registry restarts with the node's own services instead of taking the
+  `:x3m_system` application down, and stopping it no longer waits 10 seconds
+- A node whose `:x3m_system` application starts after it joined the cluster sees its peers'
+  services at once, instead of after the next 20-second exchange
 
 # 0.9.6
 
