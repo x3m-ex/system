@@ -11,6 +11,7 @@ defmodule X3m.System.Aggregate.RuntimeTest do
   }
 
   alias X3m.System.Test.Account.TimeoutMessageHandler
+  alias X3m.System.Test.Account.{BrokenAggregate, BrokenMessageHandler}
   alias X3m.System.Test.Account.AbandoningLoadHandler
   alias X3m.System.Test.Account.{SnapshotMessageHandler, StateStore}
 
@@ -87,6 +88,34 @@ defmodule X3m.System.Aggregate.RuntimeTest do
         |> MessageHandler.open_account()
 
       assert {:error, :key_already_registered, _pid} = replied.response
+    end
+
+    test "a duplicate create leaves the live aggregate registered, serving and alone" do
+      account_id = _id()
+
+      {:reply, _opened} =
+        :open_account
+        |> TestSupport.command_message(%{"id" => account_id, "owner_id" => "u1"})
+        |> MessageHandler.open_account()
+
+      {:ok, live_pid} = _registry_get(account_id)
+      aggregates_before = _aggregate_pids()
+
+      {:reply, duplicate} =
+        :open_account
+        |> TestSupport.command_message(%{"id" => account_id, "owner_id" => "u1"})
+        |> MessageHandler.open_account()
+
+      assert {:error, :key_already_registered, ^live_pid} = duplicate.response
+      assert aggregates_before == _aggregate_pids()
+      assert {:ok, live_pid} == _registry_get(account_id)
+
+      {:reply, deposited} =
+        :deposit
+        |> TestSupport.command_message(%{"id" => account_id, "amount" => 100})
+        |> MessageHandler.deposit()
+
+      assert {:ok, 1} == deposited.response
     end
 
     test "on_new_aggregate fails when the aggregate already exists in persistence" do
@@ -734,6 +763,55 @@ defmodule X3m.System.Aggregate.RuntimeTest do
     end
   end
 
+  describe "aggregate start failure" do
+    test "an aggregate that fails to start returns and logs an error and keeps its pid facade" do
+      account_id = _id()
+      facade_before = _pid_facade(BrokenAggregate)
+
+      {{:reply, replied}, log} =
+        ExUnit.CaptureLog.with_log(fn ->
+          :open_account
+          |> TestSupport.command_message(%{"id" => account_id})
+          |> BrokenMessageHandler.open_account()
+        end)
+
+      assert {:error, {%RuntimeError{message: "initial state unavailable"}, _stacktrace}} =
+               replied.response
+
+      assert log =~
+               "[error] Failed to start X3m.System.Test.Account.BrokenAggregate #{inspect(account_id)}"
+
+      assert log =~ "initial state unavailable"
+
+      assert facade_before == _pid_facade(BrokenAggregate)
+      assert [] == _aggregate_pids(BrokenAggregate)
+      assert :error == _registry_get(BrokenAggregate, account_id)
+    end
+
+    test "an aggregate that fails to rehydrate returns and logs an error and keeps its pid facade" do
+      account_id = _id()
+      :ok = _seed_broken_account(account_id)
+      facade_before = _pid_facade(BrokenAggregate)
+
+      {{:reply, replied}, log} =
+        ExUnit.CaptureLog.with_log(fn ->
+          :deposit
+          |> TestSupport.command_message(%{"id" => account_id, "amount" => 100})
+          |> BrokenMessageHandler.deposit()
+        end)
+
+      assert {:error, {%RuntimeError{message: "initial state unavailable"}, _stacktrace}} =
+               replied.response
+
+      assert log =~
+               "[error] Failed to start X3m.System.Test.Account.BrokenAggregate #{inspect(account_id)}"
+
+      assert facade_before == _pid_facade(BrokenAggregate)
+      assert [] == _aggregate_pids(BrokenAggregate)
+      assert :error == _registry_get(BrokenAggregate, account_id)
+    end
+  end
+
   describe "non-event-sourced (standard save/load) lifecycle" do
     setup do
       StateStore.reset()
@@ -814,14 +892,25 @@ defmodule X3m.System.Aggregate.RuntimeTest do
     |> Enum.filter(fn {event, _number, _meta} -> match?(%Events.Deposited{}, event) end)
   end
 
+  defp _seed_broken_account(account_id) do
+    message = %X3m.System.Message{
+      X3m.System.Message.new(:open_account)
+      | events: [%Events.Opened{id: account_id, owner_id: "u1"}],
+        aggregate_meta: %{id: account_id, version: -1}
+    }
+
+    {:ok, 0} = EventStore.save_events("broken-accounts-" <> account_id, message, %{})
+    :ok
+  end
+
   defp _unload(account_id) do
     X3m.System.Test.Account.Aggregate
     |> X3m.System.AggregatePidFacade.name()
     |> X3m.System.AggregatePidFacade.exit_process(account_id, :unload_for_test)
   end
 
-  defp _registry_get(account_id) do
-    X3m.System.Test.Account.Aggregate
+  defp _registry_get(aggregate_mod \\ X3m.System.Test.Account.Aggregate, account_id) do
+    aggregate_mod
     |> X3m.System.AggregateRegistry.name()
     |> X3m.System.AggregateRegistry.get(account_id)
   end
@@ -889,8 +978,8 @@ defmodule X3m.System.Aggregate.RuntimeTest do
            "#{max_restarts + 1} teardowns took #{elapsed_ms}ms, outside the #{max_seconds}s restart window"
   end
 
-  defp _pid_facade() do
-    X3m.System.Test.Account.Aggregate
+  defp _pid_facade(aggregate_mod \\ X3m.System.Test.Account.Aggregate) do
+    aggregate_mod
     |> X3m.System.AggregatePidFacade.name()
     |> Process.whereis()
   end
@@ -901,8 +990,8 @@ defmodule X3m.System.Aggregate.RuntimeTest do
     |> Process.whereis()
   end
 
-  defp _aggregate_pids() do
-    X3m.System.Test.Account.Aggregate
+  defp _aggregate_pids(aggregate_mod \\ X3m.System.Test.Account.Aggregate) do
+    aggregate_mod
     |> X3m.System.AggregateSup.name()
     |> DynamicSupervisor.which_children()
     |> Enum.map(fn {_id, pid, _type, _modules} -> pid end)

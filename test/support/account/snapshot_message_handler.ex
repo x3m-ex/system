@@ -33,9 +33,10 @@ defmodule X3m.System.Test.Account.SnapshotMessageHandler do
     |> StateStore.get()
     |> case do
       {:ok, {client_state, version}} ->
-        {:ok, pid} = spawn_new_fun.()
-        :ok = GenAggregate.set_state(pid, client_state, version)
-        {:ok, pid}
+        with {:ok, pid} <- spawn_new_fun.() do
+          :ok = GenAggregate.set_state(pid, client_state, version)
+          {:ok, pid}
+        end
 
       :not_found ->
         {:error, :not_found}

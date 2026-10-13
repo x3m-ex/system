@@ -2,6 +2,8 @@
 
 - A crashed aggregate is no longer restarted as an unregistered, empty process; the next command
   for its id rehydrates it
+- A duplicate create for a live aggregate no longer leaves an extra aggregate process behind, and
+  an aggregate that fails to start returns an error to its caller and logs it
 
 # 0.9.6
 

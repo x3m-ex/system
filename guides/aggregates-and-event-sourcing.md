@@ -458,6 +458,8 @@ governed by two overridable message-handler callbacks:
   aggregate's state.
 - `when_pid_is_not_registered/3` — called when a command targets an aggregate whose
   process isn't currently running. Override it to decide how that process is hydrated.
+  Its `spawn_new_fun` returns `{:ok, pid}` or `{:error, reason}`; return the error as is so
+  the command fails with it.
 
 Together they support a spectrum:
 
