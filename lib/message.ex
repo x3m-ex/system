@@ -28,7 +28,11 @@ defmodule X3m.System.Message do
     * `halted?` - when set to `true` it means that response should be returned to the invoker
       without further processing of Message.
   """
+
   alias X3m.System.Response
+
+  # elixir_uuid is an optional dependency, needed only when working with aggregates
+  @compile {:no_warn_undefined, UUID}
 
   @enforce_keys ~w(service_name id correlation_id causation_id invoked_at dry_run
                    origin_node reply_to halted? raw_request request valid? response events

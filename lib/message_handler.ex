@@ -293,7 +293,8 @@ defmodule X3m.System.MessageHandler do
       #  end
 
       # Should return function that takes `aggregate_mod`, `id`, `spawn_new_fun` and returns {:ok, pid} or `anything`.
-      # If `anything` is returned, `with_aggregate` will return that value and won't run command on aggregate
+      # If `anything` is returned, `with_aggregate` will return that value and won't run command on aggregate.
+      # `spawn_new_fun` returns {:ok, pid} or {:error, reason}; return the error rather than matching on {:ok, pid}
       def when_pid_is_not_registered(aggregate_mod, id, spawn_new_fun),
         do: get_from_es(aggregate_mod, id, spawn_new_fun)
 
@@ -303,16 +304,16 @@ defmodule X3m.System.MessageHandler do
         |> @repo.has?()
         |> case do
           true ->
-            {:ok, pid} = spawn_new_fun.()
+            with {:ok, pid} <- spawn_new_fun.() do
+              events =
+                id
+                |> stream_name()
+                |> @repo.stream_events()
 
-            events =
-              id
-              |> stream_name()
-              |> @repo.stream_events()
-
-            Logger.debug(fn -> "Applying events for existing aggregate #{id}" end)
-            :ok = @gen_aggregate_mod.apply_event_stream(pid, events)
-            {:ok, pid}
+              Logger.debug(fn -> "Applying events for existing aggregate #{id}" end)
+              :ok = @gen_aggregate_mod.apply_event_stream(pid, events)
+              {:ok, pid}
+            end
 
           false ->
             Logger.warning(fn -> "No events found for aggregate: #{id}" end)

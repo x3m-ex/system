@@ -8,8 +8,9 @@ defmodule Banking.Api.MixProject do
       elixir: "~> 1.17",
       start_permanent: Mix.env() == :prod,
       deps: _deps(),
-      elixirc_paths: ["lib"],
-      dialyzer: [plt_add_deps: :apps_direct]
+      elixirc_paths: _elixirc_paths(Mix.env()),
+      aliases: _aliases(),
+      dialyzer: [plt_add_deps: :apps_direct, plt_add_apps: [:telemetry]]
     ]
   end
 
@@ -24,13 +25,20 @@ defmodule Banking.Api.MixProject do
     ]
   end
 
+  defp _elixirc_paths(:test), do: ["lib", "test/support"]
+  defp _elixirc_paths(_), do: ["lib"]
+
+  # tests drive ServiceInvoker directly, so the HTTP listener is not started
+  defp _aliases,
+    do: [test: "test --no-start"]
+
   defp _deps do
     [
       {:bandit, "~> 1.0"},
       {:plug, "~> 1.16"},
       {:jason, "~> 1.4"},
       {:x3m_system, path: "../../../.."},
-      {:dialyxir, "~> 1.0", only: :dev, runtime: false},
+      {:dialyxir, "~> 1.0", only: [:dev, :test], runtime: false},
 
       # local
       {:banking, path: "../banking"}

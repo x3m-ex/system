@@ -82,12 +82,20 @@ flowchart TD
 Not every future alarm is kept in memory. The scheduler loads alarms in bulk every
 `in_memory_interval/0` milliseconds, covering the next `2 * in_memory_interval/0`
 window. On startup it calls `load_alarms/3` with `from: nil`; after that, `from` is the
-previous `until`. This is why you persist alarms in `save_alarm/3` and reload them in
-`load_alarms/3` — a far-future alarm may be persisted now and only loaded into memory
-shortly before it is due, and it is reloaded after a restart.
+previous `until`, and `until` stays `2 * in_memory_interval/0` ahead of now. This is why
+you persist alarms in `save_alarm/3` and reload them in `load_alarms/3` — a far-future
+alarm may be persisted now and only loaded into memory shortly before it is due, and it is
+reloaded after a restart.
+
+Every alarm `load_alarms/3` returns is armed, also one due at or after `until`. If it
+returns `{:error, reason}`, the scheduler logs a warning and retries the same `from` on the
+next tick, so a store outage leaves no gap.
 
 If a message with the same `X3m.System.Message.id` is already scheduled in memory, it is
-ignored (so duplicate scheduling is safe within a window).
+ignored, whether it is scheduled again or returned again by `load_alarms/3` (so duplicate
+scheduling is safe within a window). If `save_alarm/3` returns `{:error, reason}`, the
+alarm is not scheduled and `dispatch/3` returns that error; if it raises, the error is
+logged and `dispatch/3` returns `{:error, exception}`.
 
 ## Retries
 
@@ -117,6 +125,10 @@ end
 ```
 
 `dispatch_attempts` is incremented for you on each delivery.
+
+`service_responded/2` runs outside the scheduler process: if it raises, the failure is
+logged and the alarm is dropped from memory, and the scheduler keeps running. The alarm
+stays in your store and is only reloaded after a scheduler restart.
 
 ## Optional callbacks
 

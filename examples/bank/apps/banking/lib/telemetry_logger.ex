@@ -1,7 +1,7 @@
 defmodule Banking.TelemetryLogger do
   @moduledoc !"""
-  Attaches to x3m_system telemetry events and logs them.
-  """
+             Attaches to x3m_system telemetry events and logs them.
+             """
   require Logger
 
   @spec setup() :: :ok
@@ -44,7 +44,12 @@ defmodule Banking.TelemetryLogger do
   def handle_event([:x3m, :system, :discovering_service], _, %{message: msg}, _),
     do: Logger.debug(fn -> "[Dispatch] Discovering #{msg.service_name}" end)
 
-  def handle_event([:x3m, :system, :service_found], measurements, %{message: msg, service_node: node}, _) do
+  def handle_event(
+        [:x3m, :system, :service_found],
+        measurements,
+        %{message: msg, service_node: node},
+        _
+      ) do
     duration = _format_duration(measurements[:duration])
     Logger.debug(fn -> "[Dispatch] #{msg.service_name} found on #{node} in #{duration}" end)
   end
@@ -64,8 +69,13 @@ defmodule Banking.TelemetryLogger do
 
   # Service execution (on the receiving node)
 
-  def handle_event([:x3m, :system, :service_request_received], _, %{service: service, origin_node: origin}, _),
-    do: Logger.info(fn -> "[Service] Received #{service} from #{origin}" end)
+  def handle_event(
+        [:x3m, :system, :service_request_received],
+        _,
+        %{service: service, origin_node: origin},
+        _
+      ),
+      do: Logger.info(fn -> "[Service] Received #{service} from #{origin}" end)
 
   def handle_event([:x3m, :system, :executing_service], _, %{service: service}, _),
     do: Logger.debug(fn -> "[Service] Executing #{service}" end)

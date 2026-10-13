@@ -9,7 +9,14 @@ services, how a provider is chosen, and how to forward work to a specific node.
 
 When a router calls `register_services/0`, its **public** services are announced to the
 other connected nodes, and nodes exchange their service maps as they join and leave the
-cluster. The dispatcher asks this registry which nodes offer `message.service_name`:
+cluster. When the registry starts, it announces the node's services and asks every
+already-connected node for theirs, so a node whose `:x3m_system` application starts
+after it joined the cluster sees its peers' services at once. A crashed registry is
+restarted with the node's own services intact; when the application stops, the node
+withdraws its services from its peers. A router has no stop hook, so the node keeps its
+routers' services registered until the node itself stops; they also survive a restart of
+the `:x3m_system` application. The dispatcher asks this registry which nodes offer
+`message.service_name`:
 
 - a **local** provider is invoked directly in a supervised task;
 - a **remote** provider is invoked over `:erpc` from a supervised task on the caller's

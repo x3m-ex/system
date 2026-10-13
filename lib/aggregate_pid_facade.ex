@@ -103,12 +103,31 @@ defmodule X3m.System.AggregatePidFacade do
   end
 
   defp _spawn_new(key, state, opts) do
-    {:ok, pid} = AggregateSup.start_child(state.aggregate_sup, opts)
-    X3m.System.Instrumenter.execute(:new_aggr_spawned, %{}, %{id: key})
+    state.aggregate_sup
+    |> AggregateSup.start_child(opts)
+    |> case do
+      {:ok, pid} ->
+        X3m.System.Instrumenter.execute(:new_aggr_spawned, %{}, %{id: key})
+        _register(key, pid, state)
 
+      {:error, reason} = error ->
+        Logger.error(fn ->
+          "Failed to start #{inspect(state.aggregate_mod)} #{inspect(key)}: #{inspect(reason)}"
+        end)
+
+        error
+    end
+  end
+
+  # an unregistered aggregate is unreachable, so it must not outlive a failed register
+  defp _register(key, pid, state) do
     case Registry.register(state.registry, key, pid) do
-      :ok -> {:ok, pid}
-      other -> other
+      :ok ->
+        {:ok, pid}
+
+      error ->
+        AggregateSup.terminate_child(state.aggregate_sup, pid)
+        error
     end
   end
 end

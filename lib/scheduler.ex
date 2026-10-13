@@ -25,18 +25,24 @@ defmodule X3m.System.Scheduler do
 
   If `{:ok, X3m.System.Message.t()}` is returned, than that message will be dispatched instead
   of original one. This can be used to inject something in message assigns during `save_alarm`.
+
+  If `{:error, reason}` is returned, the alarm is not scheduled and `dispatch/3` returns that
+  error. If it raises, the error is logged and `dispatch/3` returns `{:error, exception}`.
   """
   @callback save_alarm(
               X3m.System.Message.t(),
               aggregate_id :: String.t(),
               state :: any()
-            ) :: :ok | {:ok, X3m.System.Message.t()}
+            ) :: :ok | {:ok, X3m.System.Message.t()} | {:error, reason :: term()}
 
   @doc """
   Load alarms callback is invoked on Scheduler's init with `load_from` as `nil`,
   and after that it is invoked each `in_memory_interval/0` with `load_from`
-  set to previous `load_until` value and new `load_until` will be
-  `load_from = 2 * in_memory_interval/0`.
+  set to the previous successful `load_until` and `load_until` set to
+  `2 * in_memory_interval/0` from now.
+
+  Every returned alarm is armed, also one due at or after `load_until`. If `{:error, reason}`
+  is returned, a warning is logged and the same `load_from` is retried on the next tick.
   """
   @callback load_alarms(
               load_from :: nil | DateTime.t(),
@@ -52,6 +58,9 @@ defmodule X3m.System.Scheduler do
   It should return either `:ok` (and remove from persitance) so message delivery is not retried or
   amount of milliseconds in which delivery will be retried with potentially
   modifed `X3m.System.Message`. Its `assigns` can used to track number of retries for example.
+
+  It runs outside the Scheduler process: if it raises, the failure is logged and the alarm is
+  dropped from memory. It stays in your store, and is only reloaded after a Scheduler restart.
   """
   @callback service_responded(X3m.System.Message.t(), state :: any()) ::
               :ok
@@ -101,9 +110,13 @@ defmodule X3m.System.Scheduler do
       in specified number of milliseconds.
       """
       use GenServer
+      require Logger
 
-      alias X3m.System.{Scheduler, Dispatcher, Message}
-      alias X3m.System.Scheduler.State
+      alias X3m.System.{Scheduler, Message}
+
+      # kept for the using module's own code, as the runtime that used them moved to Scheduler.Server
+      alias X3m.System.Dispatcher, warn: false
+      alias X3m.System.Scheduler.State, warn: false
       @behaviour Scheduler
 
       @name __MODULE__
@@ -127,151 +140,39 @@ defmodule X3m.System.Scheduler do
       opts can be either:
       - `in` - in milliseconds
       - `at` - as `DateTime`
+
+      Returns `save_alarm/3`'s `{:error, reason}`, or `{:error, exception}` if it raises.
       """
-      @spec dispatch(Message.t(), String.t(), opts :: Keyword.t()) :: :ok
-      def dispatch(%Message{} = msg, aggregate_id, in: dispatch_in_ms) do
-        dispatch_at =
-          DateTime.utc_now()
-          |> DateTime.add(dispatch_in_ms, :millisecond)
-
-        GenServer.call(
-          @name,
-          {:schedule_dispatch, msg, aggregate_id, dispatch_at, dispatch_in_ms}
-        )
-      end
-
-      def dispatch(%Message{} = msg, aggregate_id, at: %DateTime{} = dispatch_at) do
-        dispatch_in_ms =
-          dispatch_at
-          |> DateTime.diff(DateTime.utc_now(), :millisecond)
-
-        GenServer.call(
-          @name,
-          {:schedule_dispatch, msg, aggregate_id, dispatch_at, dispatch_in_ms}
-        )
-      end
+      @spec dispatch(Message.t(), aggregate_id :: String.t(), opts :: Keyword.t()) ::
+              :ok | {:error, reason :: term()}
+      def dispatch(%Message{} = msg, aggregate_id, opts),
+        do: X3m.System.Scheduler.Server.dispatch(@name, msg, aggregate_id, opts)
 
       @impl GenServer
       @doc false
-      def init(client_state) do
-        send(self(), :load_alarms)
+      def init(client_state),
+        do: X3m.System.Scheduler.Server.init(client_state)
 
-        {:ok, %State{client_state: client_state, loaded_until: nil, scheduled_alarms: %{}}}
-      end
-
+      # matching only the scheduler's own requests leaves room for the using module's clauses
       @impl GenServer
       @doc false
       def handle_call(
-            {:schedule_dispatch, %Message{} = msg, aggregate_id, dispatch_at, dispatch_in_ms},
-            _from,
-            %State{} = state
-          ) do
-        msg =
-          msg
-          |> Message.assign(:dispatch_at, dispatch_at)
-          |> Message.assign(:dispatch_attempts, 0)
-
-        msg =
-          __MODULE__
-          |> apply(:save_alarm, [msg, aggregate_id, state.client_state])
-          |> case do
-            :ok -> msg
-            {:ok, %Message{} = new_message} -> new_message
-          end
-
-        scheduled_alarms =
-          cond do
-            dispatch_in_ms < 0 ->
-              msg = Message.assign(msg, :late?, true)
-              send(self(), {:dispatch, msg})
-              Map.put(state.scheduled_alarms, msg.id, msg)
-
-            DateTime.compare(state.loaded_until, dispatch_at) == :gt ->
-              Process.send_after(self(), {:dispatch, msg}, dispatch_in_ms)
-              Map.put(state.scheduled_alarms, msg.id, msg)
-
-            true ->
-              state.scheduled_alarms
-          end
-
-        {:reply, :ok, %State{state | scheduled_alarms: scheduled_alarms}}
-      end
+            {:schedule_dispatch, _msg, _aggregate_id, _dispatch_at, _dispatch_in_ms} = request,
+            from,
+            state
+          ),
+          do: X3m.System.Scheduler.Server.handle_call(__MODULE__, request, from, state)
 
       @impl GenServer
       @doc false
-      def handle_info(:load_alarms, %State{} = state) do
-        load_until =
-          (state.loaded_until || DateTime.utc_now())
-          |> DateTime.add(in_memory_interval() * 2, :millisecond)
+      def handle_info(:load_alarms, state),
+        do: X3m.System.Scheduler.Server.handle_info(__MODULE__, :load_alarms, state)
 
-        {:ok, alarms} = load_alarms(state.loaded_until, load_until, state.client_state)
+      def handle_info({:dispatch, %Message{}} = msg, state),
+        do: X3m.System.Scheduler.Server.handle_info(__MODULE__, msg, state)
 
-        scheduled_alarms =
-          alarms
-          |> Enum.reduce(%{}, fn %Message{} = msg, acc ->
-            dispatch_in_ms =
-              msg.assigns.dispatch_at
-              |> DateTime.diff(DateTime.utc_now(), :millisecond)
-
-            cond do
-              dispatch_in_ms < 0 ->
-                msg = Message.assign(msg, :late?, true)
-                send(self(), {:dispatch, msg})
-                Map.put_new(acc, msg.id, msg)
-
-              DateTime.compare(load_until, msg.assigns.dispatch_at) == :gt ->
-                Process.send_after(@name, {:dispatch, msg}, dispatch_in_ms)
-                Map.put_new(acc, msg.id, msg)
-
-              true ->
-                :ok
-                acc.scheduled_alarms
-            end
-          end)
-
-        Process.send_after(self(), :load_alarms, in_memory_interval())
-        {:noreply, %State{state | loaded_until: load_until, scheduled_alarms: scheduled_alarms}}
-      end
-
-      def handle_info({:dispatch, msg}, %State{} = state) do
-        spawn_link(fn ->
-          timeout = dispatch_timeout(msg)
-          msg = %{msg | reply_to: self()}
-
-          attempts = msg.assigns[:dispatch_attempts] || 0
-
-          msg
-          |> Message.assign(:dispatch_attempts, attempts + 1)
-          |> Dispatcher.dispatch(timeout: timeout)
-          |> service_responded(state.client_state)
-          |> case do
-            :ok ->
-              {_, scheduled_alarms} = Map.pop(state.scheduled_alarms, msg.id)
-              {:noreply, %State{state | scheduled_alarms: scheduled_alarms}}
-
-            {:retry, in_ms, %Message{} = msg} ->
-              msg = _retry_message(msg)
-              Process.send_after(@name, {:dispatch, msg}, in_ms)
-
-              scheduled_alarms = Map.put(state.scheduled_alarms, msg.id, msg)
-              {:noreply, %State{state | scheduled_alarms: scheduled_alarms}}
-          end
-        end)
-
-        {:noreply, state}
-      end
-
-      @spec _retry_message(Message.t()) :: Message.t()
-      defp _retry_message(%Message{} = msg) do
-        %{
-          msg
-          | request: nil,
-            valid?: true,
-            response: nil,
-            events: [],
-            halted?: false
-        }
-      end
+      def handle_info({:delivered, %Message{}, _result} = msg, state),
+        do: X3m.System.Scheduler.Server.handle_info(__MODULE__, msg, state)
 
       @doc false
       @spec in_memory_interval() :: milliseconds :: pos_integer()

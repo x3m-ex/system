@@ -75,8 +75,8 @@ defmodule Banking.Api.ServiceInvoker do
   defp _respond(%SysMsg{response: {:error, :key_already_registered, _}}, conn),
     do: _json(conn, 409, %{error: "aggregate already exists"})
 
-  defp _respond(%SysMsg{response: {:error, {:error, :wrong_expected_version, _}}}, conn),
-    do: _json(conn, 409, %{error: "aggregate already exists"})
+  defp _respond(%SysMsg{response: {:error, :wrong_expected_version, _version}}, conn),
+    do: _json(conn, 409, %{error: "aggregate version conflict"})
 
   defp _respond(%SysMsg{response: {:error, reason}}, conn) when is_atom(reason),
     do: _json(conn, 422, %{error: to_string(reason)})

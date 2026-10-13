@@ -28,6 +28,11 @@ defmodule X3m.System.Response do
     * `{:service_unavailable, service_name}` — no node in the cluster offers the service.
     * `{:service_timeout, service_name, message_id, timeout}` — the service did not reply
       within the dispatch timeout.
+    * `{:error, :wrong_expected_version, version}` — an aggregate-backed command lost an
+      optimistic-concurrency race (or created an aggregate that is already persisted);
+      `version` is the version the write expected.
+    * `{:error, :key_already_registered, pid}` — a create command targeted an aggregate
+      that is already running in memory.
     * `{:error, reason}` — any other domain or infrastructure error.
   """
 
@@ -42,6 +47,8 @@ defmodule X3m.System.Response do
              timeout :: non_neg_integer}
           | {:validation_error, request :: map}
           | {:missing_id, id_field :: atom | String.t()}
+          | {:error, :wrong_expected_version, version :: integer}
+          | {:error, :key_already_registered, aggregate :: pid}
           | {:error, reason :: any}
 
   @doc """

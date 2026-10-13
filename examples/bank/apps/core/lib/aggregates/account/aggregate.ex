@@ -45,8 +45,7 @@ defmodule Banking.Core.Aggregates.Account.Aggregate do
   end
 
   handle_msg :withdraw, &Commands.Withdraw.new/2, fn
-    %SysMsg{assigns: assigns, request: cmd} = msg,
-    %State{owner_id: owner_id} = state
+    %SysMsg{assigns: assigns, request: cmd} = msg, %State{owner_id: owner_id} = state
     when admin_or_owner?(assigns, owner_id) ->
       event = %Events.Withdrawn{id: cmd.id, amount: cmd.amount}
 

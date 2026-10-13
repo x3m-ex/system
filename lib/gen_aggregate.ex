@@ -4,8 +4,11 @@ defmodule X3m.System.GenAggregate do
              streams, runs commands against the aggregate module and manages the
              block/commit transaction protocol.
              """
-  use GenServer, restart: :transient
+  use GenServer, restart: :temporary
   require Logger
+
+  # elixir_uuid is an optional dependency, needed only when working with aggregates
+  @compile {:no_warn_undefined, UUID}
 
   alias X3m.System.Message
   @behaviour X3m.System.GenAggregateMod

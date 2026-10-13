@@ -92,7 +92,7 @@ defmodule X3m.System.Test.Account.EventStore do
       expected_version = message.aggregate_meta.version
 
       if expected_version != current_version do
-        {{:error, :wrong_expected_version, current_version}, state}
+        {{:error, :wrong_expected_version, expected_version}, state}
       else
         metadata = Map.put(events_metadata, :message_id, message.id)
 

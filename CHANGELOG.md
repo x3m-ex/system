@@ -1,3 +1,28 @@
+# 0.9.7
+
+- A crashed aggregate is no longer restarted as an unregistered, empty process; the next command
+  for its id rehydrates it
+- A duplicate create for a live aggregate no longer leaves an extra aggregate process behind, and
+  an aggregate that fails to start returns an error to its caller and logs it
+- Scheduler: a failing `load_alarms/3` logs a warning and retries the same window on the next
+  tick instead of crashing; alarms loaded at or after the window end are armed instead of
+  crashing it
+- Scheduler: a message already scheduled in memory is ignored when scheduled or loaded again,
+  as documented
+- Scheduler: a raising `service_responded/2` or `save_alarm/3` is logged and no longer crashes
+  the scheduler; `dispatch/3` returns `save_alarm/3`'s `{:error, reason}`, or
+  `{:error, exception}` when it raises
+- Scheduler: alarms are loaded `2 * in_memory_interval/0` ahead of now on every tick, instead of
+  a window that grew with each tick
+- `X3m.System.Response` documents the `{:error, :wrong_expected_version, version}` and
+  `{:error, :key_already_registered, pid}` responses aggregate-backed commands can return
+- A crashed service registry restarts with the node's own services instead of taking the
+  `:x3m_system` application down, and stopping it no longer waits 10 seconds
+- A node whose `:x3m_system` application starts after it joined the cluster sees its peers'
+  services at once, instead of after the next 20-second exchange
+- Compiling `x3m_system` without the optional `elixir_uuid` no longer warns that
+  `UUID.uuid4/0` is undefined
+
 # 0.9.6
 
 - `X3m.System.Aggregate.initial_state/1` results pass dialyzer when given to a generated

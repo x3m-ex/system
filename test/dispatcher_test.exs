@@ -480,13 +480,10 @@ defmodule X3m.System.DispatcherTest do
     assert_receive {:DOWN, ^ref, :process, ^registry, :killed}
   end
 
-  # a killed registry leaves its telemetry handler attached, which would fail its restart
   defp _restart_service_registry do
-    :ok = :telemetry.detach("x3m-system-services")
     :ok = :sys.resume(X3m.System.Application)
     # the supervisor handles the registry's EXIT before this call, so it is restarted
     _children = Supervisor.which_children(X3m.System.Application)
-    :ok = X3m.System.Test.Router.register_services()
   end
 
   # a handler that outlives its test would emit telemetry into the next test's handlers
