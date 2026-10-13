@@ -20,6 +20,8 @@
   `:x3m_system` application down, and stopping it no longer waits 10 seconds
 - A node whose `:x3m_system` application starts after it joined the cluster sees its peers'
   services at once, instead of after the next 20-second exchange
+- Compiling `x3m_system` without the optional `elixir_uuid` no longer warns that
+  `UUID.uuid4/0` is undefined
 
 # 0.9.6
 
