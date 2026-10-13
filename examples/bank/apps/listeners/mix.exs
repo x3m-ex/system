@@ -12,7 +12,7 @@ defmodule Banking.Listeners.MixProject do
       elixirc_paths: _elixirc_paths(Mix.env()),
       dialyzer: [
         plt_add_deps: :apps_direct,
-        plt_add_apps: [:ecto, :extreme, :jason, :x3m_system]
+        plt_add_apps: [:ecto, :extreme, :jason, :protobuf, :x3m_system]
       ]
     ]
   end

@@ -418,7 +418,7 @@ defmodule MyApp.Accounts.MessageHandlerTest do
   end
 
   test "opens an account and persists the event" do
-    id = UUID.uuid4()
+    id = "acc-#{System.unique_integer([:positive])}"
     msg = command_message(:open_account, %{"id" => id, "owner" => "Ada"})
 
     assert {:reply, replied} = MessageHandler.open_account(msg)

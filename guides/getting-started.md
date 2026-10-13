@@ -16,10 +16,6 @@ def deps do
 end
 ```
 
-One dependency is optional:
-
-- `:elixir_uuid` — id generation when working with [aggregates](aggregates-and-event-sourcing.md).
-
 `X3m.System` starts its own OTP application (a task supervisor, a node monitor and the
 service registry), so once it is a dependency there is nothing to add to your
 supervision tree to use the messaging layer.

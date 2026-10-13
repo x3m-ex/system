@@ -31,9 +31,6 @@ defmodule X3m.System.Message do
 
   alias X3m.System.Response
 
-  # elixir_uuid is an optional dependency, needed only when working with aggregates
-  @compile {:no_warn_undefined, UUID}
-
   @enforce_keys ~w(service_name id correlation_id causation_id invoked_at dry_run
                    origin_node reply_to halted? raw_request request valid? response events
                    aggregate_meta assigns logger_metadata)a
@@ -390,8 +387,9 @@ defmodule X3m.System.Message do
 
     case {id, opts[:generate_if_missing] == true} do
       {nil, true} ->
-        id = UUID.uuid4()
-        raw_request = Map.put(message.raw_request, id_field, id)
+        id = X3m.System.Uuid.v7()
+        # Message.new/2 leaves raw_request nil when none is given
+        raw_request = Map.put(message.raw_request || %{}, id_field, id)
         aggregate_meta = Map.put(message.aggregate_meta, :id, id)
 
         message

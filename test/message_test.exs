@@ -73,6 +73,20 @@ defmodule X3m.System.MessageTest do
     end
   end
 
+  describe "prepare_aggregate_id/3" do
+    test "generates an id for a message created without a raw_request" do
+      message =
+        :open_account
+        |> Message.new()
+        |> Message.prepare_aggregate_id(:id, generate_if_missing: true)
+
+      assert %Message{halted?: false, aggregate_meta: %{id: id}, raw_request: %{id: id}} =
+               message
+
+      assert is_binary(id)
+    end
+  end
+
   describe "put_request/2" do
     test "stores a valid request and keeps the message open" do
       msg = Message.put_request(%{owner: "Ada"}, Message.new(:open_account))

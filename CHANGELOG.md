@@ -1,3 +1,58 @@
+# 0.10.0
+
+- Generated ids (aggregate ids, transaction ids) are now UUIDv7, so they are time-ordered, and
+  the `elixir_uuid` dependency is no longer needed: an app without it no longer crashes on an
+  aggregate command
+- `Message.prepare_aggregate_id/3` with `generate_if_missing: true` generates an id for a
+  message created without a `raw_request` instead of raising `BadMapError`
+
+## Upgrading from 0.9.6 or 0.9.7
+
+Some of these changes already shipped in 0.9.7 without upgrade notes.
+
+- **Generated ids are UUIDv7, not v4.** Ids from
+  `Message.prepare_aggregate_id(..., generate_if_missing: true)` and transaction ids are
+  time-ordered and carry their creation time in milliseconds, readable by anyone who sees the
+  id. Action: drop checks for version 4 and don't expose generated ids where their creation
+  time must stay private.
+- **x3m_system no longer uses `elixir_uuid`.** Action: you may drop `{:elixir_uuid, ...}` from
+  your deps unless your own code calls `UUID`.
+- **`Scheduler.dispatch/3` can return `{:error, reason}`** (0.9.7) when `save_alarm/3` returns
+  `{:error, reason}` or raises (`{:error, exception}`). Action: handle it instead of matching
+  `:ok = MyScheduler.dispatch(...)`:
+  ```elixir
+  case MyScheduler.dispatch(msg, aggregate_id, in: 60_000) do
+    :ok -> :ok
+    {:error, reason} -> handle_not_scheduled(reason)
+  end
+  ```
+  `save_alarm/3` may now return `{:error, reason}`, and a `load_alarms/3` error is retried on
+  the next tick instead of crashing the scheduler; existing implementations need no change.
+- **Scheduling a message id that is already scheduled is ignored** (0.9.7, as documented): the
+  second `dispatch/3` returns `:ok` without calling `save_alarm/3`, and the message is delivered
+  once. Action: give every alarm its own message, e.g. a fresh `Message.new/2` per alarm.
+- **A raising `service_responded/2` no longer crashes the scheduler** (0.9.7): the failure is
+  logged and the alarm is dropped from memory; it stays in your store and is only reloaded
+  after a scheduler restart. Action: return `:ok` or `{:retry, in_ms, msg}` instead of raising.
+- **`spawn_new_fun` in `when_pid_is_not_registered/3` can return `{:error, reason}`** (0.9.7),
+  e.g. when the aggregate's `initial_state/0` raises. Action: in an override, pass the error
+  through instead of matching `{:ok, pid} = spawn_new_fun.()`:
+  ```elixir
+  with {:ok, pid} <- spawn_new_fun.() do
+    :ok = X3m.System.GenAggregate.set_state(pid, loaded_state, version)
+    {:ok, pid}
+  end
+  ```
+- **A crashed aggregate process is not restarted** (0.9.7); it used to come back as an
+  unregistered, empty orphan. The next command for its id rehydrates it. Action: none, unless
+  you monitor aggregate pids and expect a crashed one to come back.
+- **The service registry keeps a node's services** (0.9.7): a router's services survive a
+  stop/start of `:x3m_system`, a registry crash no longer withdraws them from peers, and
+  stopping no longer pauses 10 seconds. Action: none, unless your tests restart `:x3m_system`
+  expecting an empty registry or relied on the pause.
+- **Scheduler log lines come from `X3m.System.Scheduler.Server`** (0.9.7), not from your
+  scheduler module. Action: only if you filter logs by module.
+
 # 0.9.7
 
 - A crashed aggregate is no longer restarted as an unregistered, empty process; the next command

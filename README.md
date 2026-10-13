@@ -21,14 +21,10 @@ and use the scheduler independently of everything else.
 ```elixir
 def deps do
   [
-    {:x3m_system, "~> 0.9.7"}
+    {:x3m_system, "~> 0.10.0"}
   ]
 end
 ```
-
-One dependency is optional:
-
-- `:elixir_uuid` — needed when working with aggregates (id generation).
 
 ## A minimal example
 

@@ -998,5 +998,5 @@ defmodule X3m.System.Aggregate.RuntimeTest do
     |> Enum.sort()
   end
 
-  defp _id(), do: UUID.uuid4()
+  defp _id(), do: X3m.System.Uuid.v7()
 end
