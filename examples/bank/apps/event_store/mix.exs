@@ -12,6 +12,10 @@ defmodule Banking.EventStore.MixProject do
     ]
   end
 
+  def cli do
+    [preferred_envs: [bless: :test]]
+  end
+
   def application do
     [extra_applications: [:logger]]
   end
@@ -24,6 +28,7 @@ defmodule Banking.EventStore.MixProject do
       {:postgrex, "~> 0.19", optional: true},
       {:ecto, "~> 3.12", optional: true},
       {:ecto_sql, "~> 3.12", optional: true},
+      {:dialyxir, "~> 1.0", only: [:dev, :test], runtime: false},
 
       # local
       {:banking, path: "../banking"}

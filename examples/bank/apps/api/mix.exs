@@ -10,7 +10,7 @@ defmodule Banking.Api.MixProject do
       deps: _deps(),
       elixirc_paths: _elixirc_paths(Mix.env()),
       aliases: _aliases(),
-      dialyzer: [plt_add_deps: :apps_direct]
+      dialyzer: [plt_add_deps: :apps_direct, plt_add_apps: [:telemetry]]
     ]
   end
 
@@ -38,7 +38,7 @@ defmodule Banking.Api.MixProject do
       {:plug, "~> 1.16"},
       {:jason, "~> 1.4"},
       {:x3m_system, path: "../../../.."},
-      {:dialyxir, "~> 1.0", only: :dev, runtime: false},
+      {:dialyxir, "~> 1.0", only: [:dev, :test], runtime: false},
 
       # local
       {:banking, path: "../banking"}

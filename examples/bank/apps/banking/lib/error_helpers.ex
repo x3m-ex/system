@@ -1,7 +1,7 @@
 defmodule Banking.ErrorHelpers do
   @moduledoc !"""
-  Converts Ecto changesets into JSON-friendly error maps.
-  """
+             Converts Ecto changesets into JSON-friendly error maps.
+             """
 
   @spec traverse_errors(changeset :: Ecto.Changeset.t()) :: %{atom() => [String.t()]}
   def traverse_errors(%Ecto.Changeset{} = changeset) do
