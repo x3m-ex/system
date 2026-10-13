@@ -7,9 +7,6 @@ defmodule X3m.System.GenAggregate do
   use GenServer, restart: :temporary
   require Logger
 
-  # elixir_uuid is an optional dependency, needed only when working with aggregates
-  @compile {:no_warn_undefined, UUID}
-
   alias X3m.System.Message
   @behaviour X3m.System.GenAggregateMod
 
@@ -114,7 +111,7 @@ defmodule X3m.System.GenAggregate do
     |> case do
       {:block, %Message{} = message, %X3m.System.Aggregate.State{} = aggregate_state} ->
         state = %State{state | aggregate_state: aggregate_state}
-        transaction_id = UUID.uuid4()
+        transaction_id = X3m.System.Uuid.v7()
         response = {:block, message, transaction_id}
         Logger.metadata([])
 

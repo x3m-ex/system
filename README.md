@@ -26,10 +26,6 @@ def deps do
 end
 ```
 
-One dependency is optional:
-
-- `:elixir_uuid` — needed when working with aggregates (id generation).
-
 ## A minimal example
 
 Define a router that registers a service and the module that handles it,

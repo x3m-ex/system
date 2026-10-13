@@ -74,7 +74,7 @@ defmodule X3m.System.MixProject do
   def application do
     [
       mod: {X3m.System.Application, []},
-      extra_applications: [:logger]
+      extra_applications: [:logger, :crypto]
     ]
   end
 
@@ -98,8 +98,6 @@ defmodule X3m.System.MixProject do
   defp _deps do
     [
       {:telemetry, "~> 0.4 or ~> 1.0"},
-      # needed when working with aggregates
-      {:elixir_uuid, "~> 1.2", optional: true},
       {:ecto, "~> 3.0", only: :test},
 
       # test dependencies
