@@ -23,7 +23,7 @@ defmodule Banking.EventStore.MixProject do
   defp _deps do
     [
       {:jason, "~> 1.4"},
-      {:extreme, "~> 1.0"},
+      {:extreme, "~> 1.2.0"},
       {:x3m_system, path: "../../../.."},
       {:postgrex, "~> 0.19", optional: true},
       {:ecto, "~> 3.12", optional: true},

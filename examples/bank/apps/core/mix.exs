@@ -10,7 +10,7 @@ defmodule Banking.Core.MixProject do
       deps: _deps(),
       aliases: _aliases(),
       elixirc_paths: _elixirc_paths(Mix.env()),
-      dialyzer: [plt_add_deps: :apps_direct]
+      dialyzer: [plt_add_deps: :apps_direct, plt_add_apps: [:protobuf]]
     ]
   end
 
@@ -35,7 +35,7 @@ defmodule Banking.Core.MixProject do
   defp _deps do
     [
       {:x3m_system, path: "../../../.."},
-      {:extreme, "~> 1.0"},
+      {:extreme, "~> 1.2.0"},
       {:jason, "~> 1.4"},
       {:ecto, "~> 3.12"},
       {:dialyxir, "~> 1.0", only: [:dev, :test], runtime: false},
