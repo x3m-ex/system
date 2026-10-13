@@ -85,6 +85,34 @@ defmodule X3m.System.Scheduler.RobustnessTest do
   end
 
   describe "delivering alarms" do
+    test "a message scheduled in the past is delivered at once, marked late" do
+      _pid = _start([])
+      assert_receive {:load_alarms, nil, _until, _now}
+      %Message{id: id} = msg = Message.new(:wrong_service)
+
+      :ok = ProbeScheduler.dispatch(msg, "aggregate_id", in: -1_000)
+
+      assert_receive {:service_responded, %Message{id: ^id, assigns: %{late?: true}}, _dispatcher}
+    end
+
+    test "a message scheduled in the past while the store is down is delivered at once, marked late" do
+      _pid = _start(load: fn _from, _until -> {:error, :store_down} end)
+      assert_receive {:load_alarms, nil, _until, _now}
+      %Message{id: id} = msg = Message.new(:wrong_service)
+
+      :ok = ProbeScheduler.dispatch(msg, "aggregate_id", in: -1_000)
+
+      assert_receive {:service_responded, %Message{id: ^id, assigns: %{late?: true}}, _dispatcher}
+    end
+
+    test "an overdue alarm loaded from the store is delivered at once, marked late" do
+      _pid = _start(load: _load_once(fn until -> DateTime.add(until, -1, :hour) end))
+      assert_receive {:load_alarms, nil, _until, _now}
+      assert_receive {:loaded, %Message{id: id}}
+
+      assert_receive {:service_responded, %Message{id: ^id, assigns: %{late?: true}}, _dispatcher}
+    end
+
     test "scheduling the same message twice delivers it once" do
       _pid = _start([])
       assert_receive {:load_alarms, nil, _until, _now}
