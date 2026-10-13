@@ -3,6 +3,8 @@
 - Generated ids (aggregate ids, transaction ids) are now UUIDv7, so they are time-ordered, and
   the `elixir_uuid` dependency is no longer needed: an app without it no longer crashes on an
   aggregate command
+- `Message.prepare_aggregate_id/3` with `generate_if_missing: true` generates an id for a
+  message created without a `raw_request` instead of raising `BadMapError`
 
 ## Upgrading from 0.9.6 or 0.9.7
 

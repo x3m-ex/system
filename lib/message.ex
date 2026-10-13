@@ -388,7 +388,8 @@ defmodule X3m.System.Message do
     case {id, opts[:generate_if_missing] == true} do
       {nil, true} ->
         id = X3m.System.Uuid.v7()
-        raw_request = Map.put(message.raw_request, id_field, id)
+        # Message.new/2 leaves raw_request nil when none is given
+        raw_request = Map.put(message.raw_request || %{}, id_field, id)
         aggregate_meta = Map.put(message.aggregate_meta, :id, id)
 
         message
