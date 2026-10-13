@@ -1,3 +1,8 @@
+# Unreleased
+
+- A crashed aggregate is no longer restarted as an unregistered, empty process; the next command
+  for its id rehydrates it
+
 # 0.9.6
 
 - `X3m.System.Aggregate.initial_state/1` results pass dialyzer when given to a generated

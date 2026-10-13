@@ -4,7 +4,7 @@ defmodule X3m.System.GenAggregate do
              streams, runs commands against the aggregate module and manages the
              block/commit transaction protocol.
              """
-  use GenServer, restart: :transient
+  use GenServer, restart: :temporary
   require Logger
 
   alias X3m.System.Message

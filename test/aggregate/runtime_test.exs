@@ -676,6 +676,61 @@ defmodule X3m.System.Aggregate.RuntimeTest do
         end)
 
       assert log =~ "[warning] Commit timed out after 50ms"
+      refute log =~ "[error]"
+    end
+  end
+
+  describe "aggregate crash" do
+    test "an exception raised by the aggregate leaves no aggregate process behind" do
+      account_id = _id()
+      aggregates_before = _aggregate_pids()
+
+      {:reply, _opened} =
+        :open_account
+        |> TestSupport.command_message(%{"id" => account_id, "owner_id" => "u1"})
+        |> MessageHandler.open_account()
+
+      {:ok, crashed_pid} = _registry_get(account_id)
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          :ok = _explode(account_id)
+          :ok = _await_unregistered(account_id)
+        end)
+
+      assert log =~ "aggregate exploded"
+      refute Process.alive?(crashed_pid)
+      assert aggregates_before == _aggregate_pids()
+    end
+
+    test "the next command after an aggregate crash rehydrates from persisted events" do
+      account_id = _id()
+
+      {:reply, _opened} =
+        :open_account
+        |> TestSupport.command_message(%{"id" => account_id, "owner_id" => "u1"})
+        |> MessageHandler.open_account()
+
+      {:reply, _deposited} =
+        :deposit
+        |> TestSupport.command_message(%{"id" => account_id, "amount" => 100})
+        |> MessageHandler.deposit()
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          :ok = _explode(account_id)
+          :ok = _await_unregistered(account_id)
+        end)
+
+      assert log =~ "aggregate exploded"
+
+      {:reply, withdrawn} =
+        :withdraw
+        |> TestSupport.command_message(%{"id" => account_id, "amount" => 100})
+        |> MessageHandler.withdraw()
+
+      assert {:ok, 2} == withdrawn.response
+      assert {:ok, _fresh_pid} = _registry_get(account_id)
     end
   end
 
@@ -806,6 +861,16 @@ defmodule X3m.System.Aggregate.RuntimeTest do
       |> TimeoutMessageHandler.deposit()
     rescue
       MatchError -> :ok
+    catch
+      :exit, _reason -> :ok
+    end
+  end
+
+  defp _explode(account_id) do
+    try do
+      :explode
+      |> TestSupport.command_message(%{"id" => account_id})
+      |> MessageHandler.explode()
     catch
       :exit, _reason -> :ok
     end

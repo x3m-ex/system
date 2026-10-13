@@ -62,6 +62,10 @@ defmodule X3m.System.Test.Account.Aggregate do
       {:noblock, SysMsg.error(msg, :forbidden), state}
   end
 
+  handle_msg :explode, fn %SysMsg{} = _msg, %State{} = _state ->
+    raise "aggregate exploded"
+  end
+
   def processed_message_id(%{message_id: id}), do: id
 
   def apply_event(%Events.Opened{} = e, %State{} = state),
