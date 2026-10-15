@@ -62,6 +62,10 @@ defmodule X3m.System.Test.Account.Aggregate do
       {:noblock, SysMsg.error(msg, :forbidden), state}
   end
 
+  handle_msg :remove_beneficiary, fn %SysMsg{} = msg, %State{} = state ->
+    {:noblock, SysMsg.error(msg, :not_found), state}
+  end
+
   handle_msg :explode, fn %SysMsg{} = _msg, %State{} = _state ->
     raise "aggregate exploded"
   end

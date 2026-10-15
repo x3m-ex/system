@@ -164,6 +164,25 @@ defmodule X3m.System.Aggregate.RuntimeTest do
       assert log =~ "[warning] No events found for aggregate: #{account_id}"
     end
 
+    test "on_maybe_new_aggregate returns a not_found answer from a live aggregate without creating it" do
+      account_id = _id()
+
+      {:reply, _created} =
+        :ensure_account
+        |> TestSupport.command_message(%{"id" => account_id, "owner_id" => "u1"})
+        |> MessageHandler.ensure_account()
+
+      {:ok, live_pid} = _registry_get(account_id)
+
+      {:reply, replied} =
+        :remove_beneficiary
+        |> TestSupport.command_message(%{"id" => account_id})
+        |> MessageHandler.remove_beneficiary()
+
+      assert {:error, :not_found} == replied.response
+      assert {:ok, live_pid} == _registry_get(account_id)
+    end
+
     test "on_maybe_new_aggregate creating a missing aggregate logs no warning" do
       account_id = _id()
 
@@ -495,6 +514,31 @@ defmodule X3m.System.Aggregate.RuntimeTest do
   end
 
   describe "save failures" do
+    test "on_maybe_new_aggregate returns a not_found save_events error on an existing aggregate without creating it" do
+      account_id = _id()
+      stream = "accounts-" <> account_id
+
+      {:reply, _created} =
+        :ensure_account
+        |> TestSupport.command_message(%{"id" => account_id, "owner_id" => "u1"})
+        |> MessageHandler.ensure_account()
+
+      EventStore.fail(stream, {:error, :not_found})
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          {:reply, replied} =
+            :ensure_account
+            |> TestSupport.command_message(%{"id" => account_id, "owner_id" => "u2"})
+            |> MessageHandler.ensure_account()
+
+          assert {:error, :not_found} == replied.response
+        end)
+
+      assert [_save_error] = Regex.scan(~r/Error saving events/, log)
+      assert [{%Events.Opened{owner_id: "u1"}, 0, _}] = EventStore.dump(stream)
+    end
+
     test "a not_found save_events error on a live aggregate is not logged as a missing aggregate" do
       account_id = _id()
 

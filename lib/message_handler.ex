@@ -113,17 +113,12 @@ defmodule X3m.System.MessageHandler do
             unquote(cmd)
             |> execute_on_aggregate(msg,
               commit_timeout: unquote(commit_timeout),
-              not_found_log_level: :debug
+              not_found_log_level: :debug,
+              when_not_found: fn ->
+                unquote(cmd)
+                |> execute_on_new_aggregate(msg, commit_timeout: unquote(commit_timeout))
+              end
             )
-            |> case do
-              %X3m.System.Message{response: {:error, :not_found}} ->
-                execute_on_new_aggregate(unquote(cmd), msg,
-                  commit_timeout: unquote(commit_timeout)
-                )
-
-              %X3m.System.Message{} = message ->
-                message
-            end
         end
         |> respond_on()
       end
@@ -226,6 +221,8 @@ defmodule X3m.System.MessageHandler do
            ) do
         {not_found_log_level, opts} = Keyword.pop(opts, :not_found_log_level, :warning)
 
+        {when_not_found, opts} = Keyword.pop(opts, :when_not_found)
+
         with {:ok, pid} <- _get_pid(id, not_found_log_level),
              {:block, %X3m.System.Message{} = message, transaction_id} <-
                @gen_aggregate_mod.handle_msg(pid, cmd, message, opts),
@@ -254,6 +251,12 @@ defmodule X3m.System.MessageHandler do
                 message
             end
 
+          :aggregate_not_found when is_nil(when_not_found) ->
+            X3m.System.Message.return(message, {:error, :not_found})
+
+          :aggregate_not_found ->
+            when_not_found.()
+
           error ->
             X3m.System.Message.return(message, error)
         end
@@ -263,9 +266,9 @@ defmodule X3m.System.MessageHandler do
         @pid_facade_name
         |> @pid_facade_mod.get_pid(id, &when_pid_is_not_registered/3)
         |> case do
-          {:error, :not_found} = not_found ->
+          {:error, :not_found} ->
             Logger.log(not_found_log_level, fn -> "No events found for aggregate: #{id}" end)
-            not_found
+            :aggregate_not_found
 
           other ->
             other
