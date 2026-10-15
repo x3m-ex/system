@@ -148,6 +148,39 @@ defmodule X3m.System.Aggregate.RuntimeTest do
       assert {:error, :not_found} = replied.response
     end
 
+    test "on_aggregate on a missing aggregate logs a warning" do
+      account_id = _id()
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          {:reply, replied} =
+            :deposit
+            |> TestSupport.command_message(%{"id" => account_id, "amount" => 10})
+            |> MessageHandler.deposit()
+
+          assert {:error, :not_found} == replied.response
+        end)
+
+      assert log =~ "[warning] No events found for aggregate: #{account_id}"
+    end
+
+    test "on_maybe_new_aggregate creating a missing aggregate logs no warning" do
+      account_id = _id()
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          {:reply, created} =
+            :ensure_account
+            |> TestSupport.command_message(%{"id" => account_id, "owner_id" => "u1"})
+            |> MessageHandler.ensure_account()
+
+          assert {:created, account_id, 0} == created.response
+        end)
+
+      assert log =~ "[debug] No events found for aggregate: #{account_id}"
+      refute log =~ "[warning]"
+    end
+
     test "on_maybe_new_aggregate creates when absent, updates owner when changed, no-ops when unchanged" do
       account_id = _id()
       stream = "accounts-" <> account_id
@@ -462,6 +495,30 @@ defmodule X3m.System.Aggregate.RuntimeTest do
   end
 
   describe "save failures" do
+    test "a not_found save_events error on a live aggregate is not logged as a missing aggregate" do
+      account_id = _id()
+
+      {:reply, _opened} =
+        :open_account
+        |> TestSupport.command_message(%{"id" => account_id, "owner_id" => "u1"})
+        |> MessageHandler.open_account()
+
+      EventStore.fail("accounts-" <> account_id, {:error, :not_found})
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          {:reply, replied} =
+            :deposit
+            |> TestSupport.command_message(%{"id" => account_id, "amount" => 10})
+            |> MessageHandler.deposit()
+
+          assert {:error, :not_found} == replied.response
+        end)
+
+      assert log =~ "[error] Error saving events {:error, :not_found}"
+      refute log =~ "No events found for aggregate"
+    end
+
     test "a generic save_events error kills the aggregate and returns the error" do
       account_id = _id()
       EventStore.fail("accounts-" <> account_id, {:error, :boom})

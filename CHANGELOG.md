@@ -2,6 +2,9 @@
 
 - A rejected new-aggregate command (for example `{:validation_error, changeset}`) logs
   "New aggregate creation failed" at debug instead of warning
+- `on_maybe_new_aggregate` creating a missing aggregate logs "No events found for aggregate" at
+  debug instead of warning; `on_aggregate` still warns, now also when a
+  `when_pid_is_not_registered/3` override returns `{:error, :not_found}`
 
 # 0.10.0
 
