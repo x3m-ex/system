@@ -1,4 +1,4 @@
-# Unreleased
+# 0.10.1
 
 - A rejected new-aggregate command (for example `{:validation_error, changeset}`) logs
   "New aggregate creation failed" at debug instead of warning

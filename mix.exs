@@ -1,7 +1,7 @@
 defmodule X3m.System.MixProject do
   use Mix.Project
 
-  @version "0.10.0"
+  @version "0.10.1"
   @source_url "https://github.com/x3m-ex/system"
 
   def project do
