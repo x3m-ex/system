@@ -202,7 +202,7 @@ defmodule X3m.System.MessageHandler do
             message
 
           {:noblock, %X3m.System.Message{} = message, _state} ->
-            Logger.warning(fn ->
+            Logger.debug(fn ->
               "New aggregate creation failed: #{inspect(message.response)}"
             end)
 

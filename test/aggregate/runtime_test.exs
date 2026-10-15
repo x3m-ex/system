@@ -390,7 +390,7 @@ defmodule X3m.System.Aggregate.RuntimeTest do
       end
     end
 
-    test "a rejected real creation still logs a warning" do
+    test "a rejected real creation logs at debug without a warning" do
       account_id = _id()
 
       log =
@@ -403,7 +403,8 @@ defmodule X3m.System.Aggregate.RuntimeTest do
           assert :error == _registry_get(account_id)
         end)
 
-      assert log =~ "[warning] New aggregate creation failed"
+      assert log =~ "[debug] New aggregate creation failed"
+      refute log =~ "[warning]"
     end
   end
 

@@ -1,3 +1,8 @@
+# Unreleased
+
+- A rejected new-aggregate command (for example `{:validation_error, changeset}`) logs
+  "New aggregate creation failed" at debug instead of warning
+
 # 0.10.0
 
 - Generated ids (aggregate ids, transaction ids) are now UUIDv7, so they are time-ordered, and
