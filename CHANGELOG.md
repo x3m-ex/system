@@ -60,7 +60,7 @@ Some of these changes already shipped in 0.9.7 without upgrade notes.
   stop/start of `:x3m_system`, a registry crash no longer withdraws them from peers, and
   stopping no longer pauses 10 seconds. Action: none, unless your tests restart `:x3m_system`
   expecting an empty registry or relied on the pause.
-- **Scheduler log lines come from `X3m.System.Scheduler.Server`** (0.9.7), not from your
+- **Scheduler log lines come from X3m.System.Scheduler.Server** (0.9.7), not from your
   scheduler module. Action: only if you filter logs by module.
 
 # 0.9.7
