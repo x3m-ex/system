@@ -7,6 +7,8 @@
   `when_pid_is_not_registered/3` override returns `{:error, :not_found}`
 - `on_maybe_new_aggregate` creates only when the aggregate is missing; a `{:error, :not_found}`
   from an existing aggregate command or from `save_events/1` is returned as is
+- An aggregate repo that implements `stream_events/3` without default arguments no longer raises
+  `UndefinedFunctionError` when an existing aggregate loads
 
 # 0.10.0
 

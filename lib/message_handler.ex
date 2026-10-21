@@ -330,7 +330,7 @@ defmodule X3m.System.MessageHandler do
               events =
                 id
                 |> stream_name()
-                |> @repo.stream_events()
+                |> @repo.stream_events(0, 1_000)
 
               Logger.debug(fn -> "Applying events for existing aggregate #{id}" end)
               :ok = @gen_aggregate_mod.apply_event_stream(pid, events)
