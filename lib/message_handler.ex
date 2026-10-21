@@ -267,7 +267,7 @@ defmodule X3m.System.MessageHandler do
         |> @pid_facade_mod.get_pid(id, &when_pid_is_not_registered/3)
         |> case do
           {:error, :not_found} ->
-            Logger.log(not_found_log_level, fn -> "No events found for aggregate: #{id}" end)
+            Logger.log(not_found_log_level, fn -> "Aggregate not found: #{id}" end)
             :aggregate_not_found
 
           other ->

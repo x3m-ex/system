@@ -161,7 +161,7 @@ defmodule X3m.System.Aggregate.RuntimeTest do
           assert {:error, :not_found} == replied.response
         end)
 
-      assert log =~ "[warning] No events found for aggregate: #{account_id}"
+      assert log =~ "[warning] Aggregate not found: #{account_id}"
     end
 
     test "on_maybe_new_aggregate returns a not_found answer from a live aggregate without creating it" do
@@ -196,7 +196,7 @@ defmodule X3m.System.Aggregate.RuntimeTest do
           assert {:created, account_id, 0} == created.response
         end)
 
-      assert log =~ "[debug] No events found for aggregate: #{account_id}"
+      assert log =~ "[debug] Aggregate not found: #{account_id}"
       refute log =~ "[warning]"
     end
 
@@ -560,7 +560,7 @@ defmodule X3m.System.Aggregate.RuntimeTest do
         end)
 
       assert log =~ "[error] Error saving events {:error, :not_found}"
-      refute log =~ "No events found for aggregate"
+      refute log =~ "Aggregate not found"
     end
 
     test "a generic save_events error kills the aggregate and returns the error" do
