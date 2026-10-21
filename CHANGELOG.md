@@ -1,3 +1,17 @@
+# 0.10.1
+
+- A rejected new-aggregate command (for example `{:validation_error, changeset}`) logs
+  "New aggregate creation failed" at debug instead of warning
+- `on_maybe_new_aggregate` creating a missing aggregate logs "Aggregate not found" at
+  debug instead of warning; `on_aggregate` still warns, now also when a
+  `when_pid_is_not_registered/3` override returns `{:error, :not_found}`
+- `on_maybe_new_aggregate` creates only when the aggregate is missing; a `{:error, :not_found}`
+  from an existing aggregate command or from `save_events/1` is returned as is
+- An aggregate repo that implements `stream_events/3` without default arguments no longer raises
+  `UndefinedFunctionError` when an existing aggregate loads
+- A missing aggregate logs "Aggregate not found: <id>" instead of
+  "No events found for aggregate: <id>"
+
 # 0.10.0
 
 - Generated ids (aggregate ids, transaction ids) are now UUIDv7, so they are time-ordered, and
@@ -50,7 +64,7 @@ Some of these changes already shipped in 0.9.7 without upgrade notes.
   stop/start of `:x3m_system`, a registry crash no longer withdraws them from peers, and
   stopping no longer pauses 10 seconds. Action: none, unless your tests restart `:x3m_system`
   expecting an empty registry or relied on the pause.
-- **Scheduler log lines come from `X3m.System.Scheduler.Server`** (0.9.7), not from your
+- **Scheduler log lines come from X3m.System.Scheduler.Server** (0.9.7), not from your
   scheduler module. Action: only if you filter logs by module.
 
 # 0.9.7

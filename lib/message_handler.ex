@@ -109,16 +109,16 @@ defmodule X3m.System.MessageHandler do
             msg
 
           %X3m.System.Message{halted?: false} = msg ->
-            execute_on_aggregate(unquote(cmd), msg, commit_timeout: unquote(commit_timeout))
-            |> case do
-              %X3m.System.Message{response: {:error, :not_found}} ->
-                execute_on_new_aggregate(unquote(cmd), msg,
-                  commit_timeout: unquote(commit_timeout)
-                )
-
-              %X3m.System.Message{} = message ->
-                message
-            end
+            # a missing aggregate is the expected branch here: it gets created below
+            unquote(cmd)
+            |> execute_on_aggregate(msg,
+              commit_timeout: unquote(commit_timeout),
+              not_found_log_level: :debug,
+              when_not_found: fn ->
+                unquote(cmd)
+                |> execute_on_new_aggregate(msg, commit_timeout: unquote(commit_timeout))
+              end
+            )
         end
         |> respond_on()
       end
@@ -202,7 +202,7 @@ defmodule X3m.System.MessageHandler do
             message
 
           {:noblock, %X3m.System.Message{} = message, _state} ->
-            Logger.warning(fn ->
+            Logger.debug(fn ->
               "New aggregate creation failed: #{inspect(message.response)}"
             end)
 
@@ -219,8 +219,11 @@ defmodule X3m.System.MessageHandler do
              %X3m.System.Message{aggregate_meta: %{id: id}} = message,
              opts
            ) do
-        with {:ok, pid} <-
-               @pid_facade_mod.get_pid(@pid_facade_name, id, &when_pid_is_not_registered/3),
+        {not_found_log_level, opts} = Keyword.pop(opts, :not_found_log_level, :warning)
+
+        {when_not_found, opts} = Keyword.pop(opts, :when_not_found)
+
+        with {:ok, pid} <- _get_pid(id, not_found_log_level),
              {:block, %X3m.System.Message{} = message, transaction_id} <-
                @gen_aggregate_mod.handle_msg(pid, cmd, message, opts),
              {:ok, %X3m.System.Message{} = message, version} <-
@@ -248,8 +251,27 @@ defmodule X3m.System.MessageHandler do
                 message
             end
 
+          :aggregate_not_found when is_nil(when_not_found) ->
+            X3m.System.Message.return(message, {:error, :not_found})
+
+          :aggregate_not_found ->
+            when_not_found.()
+
           error ->
             X3m.System.Message.return(message, error)
+        end
+      end
+
+      defp _get_pid(id, not_found_log_level) do
+        @pid_facade_name
+        |> @pid_facade_mod.get_pid(id, &when_pid_is_not_registered/3)
+        |> case do
+          {:error, :not_found} ->
+            Logger.log(not_found_log_level, fn -> "Aggregate not found: #{id}" end)
+            :aggregate_not_found
+
+          other ->
+            other
         end
       end
 
@@ -308,7 +330,7 @@ defmodule X3m.System.MessageHandler do
               events =
                 id
                 |> stream_name()
-                |> @repo.stream_events()
+                |> @repo.stream_events(0, 1_000)
 
               Logger.debug(fn -> "Applying events for existing aggregate #{id}" end)
               :ok = @gen_aggregate_mod.apply_event_stream(pid, events)
@@ -316,7 +338,6 @@ defmodule X3m.System.MessageHandler do
             end
 
           false ->
-            Logger.warning(fn -> "No events found for aggregate: #{id}" end)
             {:error, :not_found}
         end
       end

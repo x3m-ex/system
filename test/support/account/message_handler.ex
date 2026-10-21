@@ -13,4 +13,5 @@ defmodule X3m.System.Test.Account.MessageHandler do
   on_aggregate :close_account
   on_aggregate :explode
   on_maybe_new_aggregate :ensure_account
+  on_maybe_new_aggregate :remove_beneficiary
 end

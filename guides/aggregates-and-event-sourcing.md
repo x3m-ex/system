@@ -355,7 +355,7 @@ defmodule MyApp.Accounts.InMemoryEventStore do
     do: Agent.get(__MODULE__, &Map.has_key?(&1, stream_name))
 
   @impl true
-  def stream_events(stream_name, _start_at \\ 0, _per_page \\ 1_000),
+  def stream_events(stream_name, _start_at, _per_page),
     do: Agent.get(__MODULE__, &Map.get(&1, stream_name, []))
 
   @impl true
@@ -423,7 +423,7 @@ defmodule MyApp.Accounts.MessageHandlerTest do
 
     assert {:reply, replied} = MessageHandler.open_account(msg)
     assert {:created, ^id, 0} == replied.response
-    assert [{%Events.Opened{}, 0, _}] = InMemoryEventStore.stream_events("accounts-" <> id)
+    assert [{%Events.Opened{}, 0, _}] = InMemoryEventStore.stream_events("accounts-" <> id, 0, 1_000)
   end
 end
 ```

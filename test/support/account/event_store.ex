@@ -45,7 +45,7 @@ defmodule X3m.System.Test.Account.EventStore do
     do: Agent.get(__MODULE__, &Map.has_key?(&1.streams, stream_name))
 
   @impl true
-  def stream_events(stream_name, _start_at \\ 0, _per_page \\ 1_000),
+  def stream_events(stream_name, _start_at, _per_page),
     do: Agent.get(__MODULE__, &Map.get(&1.streams, stream_name, []))
 
   @impl true
